@@ -1,4 +1,4 @@
-"""Рендер тексту допомоги для поточного контексту."""
+"""Render help text for the current context."""
 
 from __future__ import annotations
 
