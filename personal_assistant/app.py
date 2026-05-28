@@ -21,7 +21,7 @@ from prompt_toolkit.history import InMemoryHistory
 # Each `import` runs the @command decorators and populates COMMAND_REGISTRY.
 # Members MUST NOT touch this file. TL adds these lines during integration.
 #
-# from personal_assistant.contacts import handlers as _c_handlers  # noqa: F401
+from personal_assistant.contacts import handlers as _c_handlers  # noqa: F401
 # from personal_assistant.notes import handlers as _n_handlers     # noqa: F401
 # from personal_assistant.tags import handlers as _t_handlers      # noqa: F401
 # =============================================================================
@@ -43,21 +43,21 @@ _EXIT_NAMES = {"exit", "quit", "q"}
 
 # --- Built-in Stage-0 commands -----------------------------------------------
 
-@command("hello", context=CTX_ROOT, help_text="Say hi.")
+@command("hello", context=CTX_ROOT, help_="Say hi.")
 def _hello(args, state):
     return "Hi! Type 'help' to see commands."
 
 
-@command("help", aliases=("?",),context=CTX_ROOT,  help_text="Show available commands.")
+@command("help", aliases=("?",),context=CTX_ROOT,  help_="Show available commands.")
 def _help(args, state):
     lines = ["Available commands:"]
     for cmd in primary_commands():
         if cmd.name in ("help",):
             continue
         if cmd.format:
-            lines.append(f"  {cmd.name} {cmd.format} — {cmd.help_text}")
+            lines.append(f"  {cmd.name} {cmd.format} — {cmd.help_}")
         else:
-            lines.append(f"  {cmd.name} — {cmd.help_text}")
+            lines.append(f"  {cmd.name} — {cmd.help_}")
     lines.append("  help/? — this message.")
     lines.append("  exit/quit/q — leave (auto-saves state).")
     return "\n".join(lines)
@@ -86,7 +86,8 @@ def _dispatch(line: str, state: AppState) -> tuple[str, bool]:
 # --- Entry point ------------------------------------------------------------
 
 def main() -> None:
-    contacts = _STORAGE.load(contacts_path(), dict)
+    from personal_assistant.contacts.book import ContactsBook
+    contacts = _STORAGE.load(contacts_path(), ContactsBook)
     notes = _STORAGE.load(notes_path(), dict)
     state = AppState(contacts=contacts, notes=notes)
 
