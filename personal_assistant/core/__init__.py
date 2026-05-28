@@ -1,0 +1,1 @@
+"""Shared infrastructure: fields, decorators, registry, storage, paths, state."""
