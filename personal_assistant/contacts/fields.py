@@ -1,9 +1,9 @@
-"""Поля, специфічні для контактів.
+"""Contact-specific fields.
 
-Stage 1: Name, Phone, Birthday. Stage 3 додає Email, Address і Tag —
-загальний slug, спільний для контактів і нотаток (бо теги — поняття
-наскрізне). Tag валідація приймає юнікодні літери, тож українські
-теги (наприклад, `робота`) теж пройдуть.
+Stage 1: Name, Phone, Birthday. Stage 3 adds Email, Address, and Tag:
+a shared slug used by contacts and notes because tags are a cross-cutting
+concept. Tag validation accepts Unicode letters, so non-Latin tags are valid
+too.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from personal_assistant.core.fields import Field
 
 
 class Name(Field):
-    """Поле імені контакту. Обов'язкове."""
+    """Contact name field. Required."""
 
     value: str
 
@@ -26,22 +26,21 @@ class Name(Field):
 
 
 class Phone(Field):
-    """Поле номера телефону.
+    """Phone number field.
 
-    Зберігається завжди у канонічній формі: 10 цифр без префіксу
-    (`0631234567`). На вході дозволяємо будь-які роздільники — пробіли,
-    дужки, дефіси, плюси — і міжнародний префікс `+380` / `380`. Це
-    означає, що `(063) 32-32-777`, `+380631234567`, `380 63 1234567`
-    і `0631234567` всі нормалізуються до того самого значення, тож
-    `remove`/`edit` працюватимуть незалежно від того, у якому вигляді
-    користувач його ввів першого разу.
+    Always stored in canonical form: 10 digits without a prefix
+    (`0631234567`). Input may contain any separators: spaces, parentheses,
+    hyphens, plus signs, and the international `+380` / `380` prefix. This
+    means `(063) 32-32-777`, `+380631234567`, `380 63 1234567`, and
+    `0631234567` all normalize to the same value, so `remove`/`edit` work
+    regardless of how the user entered the number the first time.
     """
 
     value: str
 
     @staticmethod
     def _normalize(raw: str) -> str:
-        """Залишає тільки цифри; `380XXXXXXXXX` (12 цифр) → `0XXXXXXXXX`."""
+        """Keep only digits; `380XXXXXXXXX` (12 digits) -> `0XXXXXXXXX`."""
         digits = re.sub(r"\D", "", raw or "")
         if len(digits) == 12 and digits.startswith("380"):
             digits = "0" + digits[3:]
@@ -59,7 +58,7 @@ class Phone(Field):
 
 
 class Birthday(Field):
-    """Дата народження у форматі DD.MM.YYYY."""
+    """Birthday in DD.MM.YYYY format."""
 
     DATE_FORMAT = "%d.%m.%Y"
     value: date
@@ -79,7 +78,7 @@ _EMAIL_RE = re.compile(r"^[\w.+-]+@[\w-]+\.[\w.-]+$", re.UNICODE)
 
 
 class Email(Field):
-    """Email з простою регексп-валідацією."""
+    """Email with simple regex validation."""
 
     value: str
 
@@ -91,7 +90,7 @@ class Email(Field):
 
 
 class Address(Field):
-    """Адреса. Мінімум 3 символи після обрізки пробілів."""
+    """Address. At least 3 characters after trimming whitespace."""
 
     value: str
 
@@ -106,13 +105,12 @@ _TAG_RE = re.compile(r"^[\w-]+$", re.UNICODE)
 
 
 class Tag(Field):
-    """Тег у вигляді slug'a (літери + цифри + `_` + `-`).
+    """Tag as a slug (letters + digits + `_` + `-`).
 
-    Юнікодні літери теж дозволені (`\\w` у Python 3 за замовчуванням
-    охоплює Cyrillic). Провідний `#` обрізається, регістр приводиться
-    до нижнього. Це той самий тип, що використовують і контакти, і
-    нотатки — щоб віртуальний модуль `tags` міг агрегувати з обох
-    сторін без додаткової конверсії.
+    Unicode letters are also allowed (`\\w` in Python 3 includes Cyrillic by
+    default). A leading `#` is stripped and the value is lowercased. This is
+    the same type used by both contacts and notes, so the virtual `tags`
+    module can aggregate from both sides without extra conversion.
     """
 
     value: str
