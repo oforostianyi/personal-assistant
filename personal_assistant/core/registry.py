@@ -24,22 +24,24 @@ CTX_TAG = "tags/*"
 class Command:
     name: str
     handler: Callable
+    context: str
     format: str = ""
-    help_: str = ""
+    help_text: str = ""
     aliases: tuple[str, ...] = dc_field(default_factory=tuple)
 
 
 COMMAND_REGISTRY: dict[str, Command] = {}
 
 
-def command(name: str, *, aliases: tuple[str, ...] = (), format: str = "", help_: str = ""):
+def command(name: str, *, context: str, aliases: tuple[str, ...] = (), format: str = "", help_text: str = ""):
     """Decorator: register a handler under `name` (and any aliases)."""
     def decorator(func: Callable) -> Callable:
         cmd = Command(
             name=name,
             handler=func,
+            context=context,
             format=format,
-            help_=help_,
+            help_text=help_text,
             aliases=tuple(aliases),
         )
         COMMAND_REGISTRY[name] = cmd

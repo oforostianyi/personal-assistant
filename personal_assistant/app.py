@@ -33,6 +33,9 @@ from personal_assistant.core.storage import PickleStorage
 from personal_assistant.ui.completer import bottom_toolbar, build_completer
 from personal_assistant.ui.fuzzy import suggest_command
 from personal_assistant.ui.parser import parse_input
+from personal_assistant.core.registry import (
+    CTX_CONTACTS, CTX_TAGS, CTX_ROOT, COMMAND_REGISTRY,
+)
 
 _STORAGE = PickleStorage()
 _EXIT_NAMES = {"exit", "quit", "q"}
@@ -40,21 +43,21 @@ _EXIT_NAMES = {"exit", "quit", "q"}
 
 # --- Built-in Stage-0 commands -----------------------------------------------
 
-@command("hello", help_="Say hi.")
+@command("hello", context=CTX_ROOT, help_text="Say hi.")
 def _hello(args, state):
     return "Hi! Type 'help' to see commands."
 
 
-@command("help", aliases=("?",), help_="Show available commands.")
+@command("help", aliases=("?",),context=CTX_ROOT,  help_text="Show available commands.")
 def _help(args, state):
     lines = ["Available commands:"]
     for cmd in primary_commands():
         if cmd.name in ("help",):
             continue
         if cmd.format:
-            lines.append(f"  {cmd.name} {cmd.format} — {cmd.help_}")
+            lines.append(f"  {cmd.name} {cmd.format} — {cmd.help_text}")
         else:
-            lines.append(f"  {cmd.name} — {cmd.help_}")
+            lines.append(f"  {cmd.name} — {cmd.help_text}")
     lines.append("  help/? — this message.")
     lines.append("  exit/quit/q — leave (auto-saves state).")
     return "\n".join(lines)
