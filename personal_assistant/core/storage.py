@@ -49,5 +49,10 @@ class PickleStorage(Storage):
         path = Path(path)
         if not path.exists():
             return default_factory()
-        with open(path, "rb") as f:
-            return pickle.load(f)
+        try:
+            with open(path, "rb") as f:
+                return pickle.load(f)
+        except (ModuleNotFoundError, AttributeError):
+            # Stale pickle file referencing classes no longer in the codebase.
+            os.unlink(path)
+            return default_factory()
