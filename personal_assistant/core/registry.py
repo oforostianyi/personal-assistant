@@ -11,6 +11,14 @@ no hierarchical REPL — to keep scope feasible in 4 days.
 from dataclasses import dataclass, field as dc_field
 from typing import Callable
 
+CTX_ROOT = "root"
+CTX_CONTACTS = "contacts"
+CTX_CONTACT = "contacts/*"
+CTX_NOTES = "notes"
+CTX_NOTE = "notes/*"
+CTX_TAGS = "tags"
+CTX_TAG = "tags/*"
+
 
 @dataclass(frozen=True)
 class Command:
