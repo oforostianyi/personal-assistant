@@ -26,14 +26,14 @@ class Command:
     handler: Callable
     context: str
     format: str = ""
-    help_text: str = ""
+    help_: str = ""
     aliases: tuple[str, ...] = dc_field(default_factory=tuple)
 
 
 COMMAND_REGISTRY: dict[str, Command] = {}
 
 
-def command(name: str, *, context: str, aliases: tuple[str, ...] = (), format: str = "", help_text: str = ""):
+def command(name: str, *, context: str = CTX_ROOT, aliases: tuple[str, ...] = (), format: str = "", help_: str = ""):
     """Decorator: register a handler under `name` (and any aliases)."""
     def decorator(func: Callable) -> Callable:
         cmd = Command(
@@ -41,7 +41,7 @@ def command(name: str, *, context: str, aliases: tuple[str, ...] = (), format: s
             handler=func,
             context=context,
             format=format,
-            help_text=help_text,
+            help_=help_,
             aliases=tuple(aliases),
         )
         COMMAND_REGISTRY[name] = cmd
