@@ -1,253 +1,449 @@
-"""Flat-style REPL commands for the Notes domain."""
+"""Notes module commands.
+
+CTX_ROOT  : `notes` — enter the module.
+CTX_NOTES : list / sort / find / filter / new.
+CTX_NOTE  : show / edit / rename / tag / untag / link / unlink / delete.
+
+`create_note_from_input` is the shared creation path for the `new` command
+and the entity-enter fallback (typing a note title at `notes>`). The user
+never sees a UUID; the stable cross-contact reference is the UUID, so
+renaming a note breaks nothing.
+"""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from prompt_toolkit import PromptSession
+from rapidfuzz import fuzz, process
 
 from personal_assistant.core.decorators import input_error
-from personal_assistant.core.registry import command
-from personal_assistant.notes.book import NotesBook
+from personal_assistant.core.registry import (
+    CTX_NOTE,
+    CTX_NOTES,
+    CTX_ROOT,
+    command,
+)
+from personal_assistant.notes.book import _VALID_SORT_FIELDS
 from personal_assistant.notes.note import Note
-from personal_assistant.notes.tagger import extract_tags
-from personal_assistant.notes.text_parser import extract_phones, suggest_contacts
-from personal_assistant.ui.tables import render_notes_table
+from personal_assistant.notes.tagger import extract_hashtags, suggest_tags
+from personal_assistant.notes.text_parser import (
+    extract_phones,
+    suggest_contacts,
+)
+from personal_assistant.ui.views import (
+    render_note_card,
+    render_notes_table,
+)
 
-if TYPE_CHECKING:
-    from personal_assistant.contacts.record import Record
+# --- shared helpers --------------------------------------------------------
 
-
-def _ensure_notes(state) -> NotesBook:
-    """Return state.notes as a NotesBook, upgrading empty dict state lazily."""
-    if isinstance(state.notes, NotesBook):
-        return state.notes
-    if isinstance(state.notes, dict) and not state.notes:
-        state.notes = NotesBook()
-        return state.notes
-    raise RuntimeError(
-        "Notes storage is in an unexpected state."
-    )
-
-
-def _known_tag_vocabulary(state) -> set[str]:
-    """Collect tag slugs currently used by contacts and notes."""
-    vocab: set[str] = set()
-
-    contacts = getattr(state, "contacts", None)
-    contact_data = getattr(contacts, "data", None) if contacts else None
-    if contact_data:
-        for record in contact_data.values():
-            for tag in getattr(record, "tags", []):
-                vocab.add(tag.value)
-
-    notes = getattr(state, "notes", None)
-    note_data = getattr(notes, "data", None) if notes else None
-    if note_data:
-        for note in note_data.values():
-            for tag in note.tags:
-                vocab.add(tag.value)
-
-    return vocab
+def _ask(prompt: str) -> str | None:
+    try:
+        return input(prompt)
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
 
 
-def _resolve_note(state, id_prefix: str) -> Note:
-    """Resolve a note by UUID prefix or raise a user-facing lookup error."""
-    note = _ensure_notes(state).find_by_id_prefix(id_prefix)
-    if note is None:
-        raise KeyError(id_prefix)
-    return note
+def _read_multiline_body() -> str | None:
+    """Read lines until a blank line (Enter on an empty line).
 
-
-def _sync_link(record: "Record", note: Note) -> None:
-    """Create a contact-note link on both sides."""
-    record.link_note(note.id)
-    note.link_contact(record.name.value)
-
-
-def _sync_unlink(record: "Record", note: Note) -> None:
-    """Remove a contact-note link from both sides."""
-    record.unlink_note(note.id)
-    note.unlink_contact(record.name.value)
-
-
-def _render_notes_table(notes: list[Note]) -> str:
-    """Render notes as a simple text table until Rich tables are available."""
-    if not notes:
-        return "No notes yet."
-
-    header = f"{'ID':<10}{'TEXT':<62}{'TAGS':<16}{'LINKED'}"
-    sep = f"{'-' * 8:<10}{'-' * 60:<62}{'-' * 14:<16}{'-' * 14}"
-    lines = [header, sep]
-    for note in notes:
-        tags = ", ".join(tag.value for tag in note.tags) if note.tags else "-"
-        linked = (
-            ", ".join(note.linked_contact_names) if note.linked_contact_names else "-"
-        )
-        if len(tags) > 14:
-            tags = tags[:13] + "..."
-        if len(linked) > 30:
-            linked = linked[:29] + "..."
-        lines.append(f"{note.id_prefix():<10}{note.preview(60):<62}{tags:<16}{linked}")
+    Ctrl-C / EOF → None (cancel).
+    """
+    print("Text (blank line to finish, Ctrl+C to cancel):")
+    lines: list[str] = []
+    while True:
+        try:
+            line = input("> ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return None
+        if line == "":
+            break
+        lines.append(line)
     return "\n".join(lines)
 
 
-@command(
-    "add-note",
-    format="<text>",
-    help_="Create a note. Auto-tags from #hashtags and known vocabulary.",
-)
-@input_error
-def add_note(args, state):
-    if not args:
-        raise ValueError("Usage: add-note <text>")
+def _collect_known_tags(state) -> set[str]:
+    """All tags already in the system (across both books)."""
+    out: set[str] = set()
+    for r in state.contacts.data.values():
+        out.update(t.value for t in r.tags)
+    for n in state.notes.data.values():
+        out.update(t.value for t in n.tags)
+    return out
 
-    text = " ".join(args).strip()
-    if not text:
-        raise ValueError("Note text cannot be empty.")
 
-    note = _ensure_notes(state).add_note(text)
-    for slug in extract_tags(text, _known_tag_vocabulary(state)):
-        note.add_tag(slug)
+def _create_note_with_body(title: str, state) -> str:
+    """Shared flow: body, auto-tags, contact suggestion, enter the note."""
+    body = _read_multiline_body()
+    if body is None:
+        return "Cancelled."
 
-    contacts = getattr(state, "contacts", None)
+    note = Note(title=title, text=body)
+
+    # Hashtags first — explicit user intent.
+    for tag in extract_hashtags(body):
+        try:
+            note.add_tag(tag)
+        except ValueError:
+            pass
+
+    # Suggested tags — only words that already exist as tags somewhere.
+    known = _collect_known_tags(state)
+    for tag in suggest_tags(body + " " + title, known):
+        try:
+            note.add_tag(tag)
+        except ValueError:
+            pass
+
+    # Contact suggestions: first by phone (exact), then by name (fuzzy).
+    # Keep first-appearance order, drop duplicates.
     suggested: list[str] = []
-    if contacts is not None and hasattr(contacts, "data"):
-        suggested = suggest_contacts(text, contacts)
+    phones_in_text = extract_phones(body + " " + title)
+    if phones_in_text:
+        for record in state.contacts.data.values():
+            if any(p.value in phones_in_text for p in record.phones):
+                if record.name.value not in suggested:
+                    suggested.append(record.name.value)
+    for name in suggest_contacts(body + " " + title, state.contacts):
+        if name not in suggested:
+            suggested.append(name)
 
-    phones = extract_phones(text)
+    state.notes.add_note(note)
+    state.enter_entity(note.title)
 
-    parts = [f"Note added. ID: {note.id_prefix()}."]
+    msgs = [f"Created note '{note.title}'."]
     if note.tags:
-        parts.append("Tags: " + ", ".join(tag.value for tag in note.tags) + ".")
+        msgs.append(f"Auto tags: {', '.join(t.value for t in note.tags)}")
     if suggested:
-        parts.append("Suggested links: " + ", ".join(suggested) + ".")
-        parts.append(f"Use `link-note {note.id_prefix()} <name>` to confirm a link.")
-    if phones:
-        parts.append("Phones detected: " + ", ".join(phones) + ".")
-    return "\n".join(parts)
+        msgs.append(f"Suggested contacts: {', '.join(suggested)}")
+        msgs.append("Tip: from inside this note, use 'link <name>'.")
+    return "\n".join(msgs)
+
+
+# --- root: enter module ---------------------------------------------------
+
+@command(
+    "notes",
+    context=CTX_ROOT,
+    help_text="Enter the notes module.",
+)
+@input_error
+def enter_notes(_args, state):
+    state.enter_module("notes")
+    return ""
+
+
+# --- shared creation path (entity-enter fallback uses this) ---------------
+
+@input_error
+def create_note_from_input(query: str, state) -> str:
+    """Create a note titled `query` and run the body flow."""
+    title = (query or "").strip()
+    if not title:
+        return "Cancelled."
+    if state.notes.is_title_taken(title):
+        raise ValueError(f"A note titled '{title}' already exists.")
+    return _create_note_with_body(title, state)
+
+
+# --- CTX_NOTES: list / sort / find / filter / new -------------------------
+
+@command(
+    "list",
+    context=CTX_NOTES,
+    help_text="List all notes.",
+)
+@input_error
+def list_notes(_args, state):
+    if not state.notes.data:
+        return "Notes book is empty."
+    field, reverse = state.notes_sort
+    return render_notes_table(state.notes.sorted_by(field, reverse))
 
 
 @command(
-    "edit-note",
-    format="<id> <new text>",
-    help_="Replace the text of a note. Tags and links are preserved.",
+    "sort",
+    context=CTX_NOTES,
+    format="<field> [asc|desc]",
+    help_text="Set the sort key for `list`.",
 )
 @input_error
-def edit_note(args, state):
-    if len(args) < 2:
-        raise ValueError("Usage: edit-note <id> <new text>")
-
-    id_prefix, *text_parts = args
-    new_text = " ".join(text_parts).strip()
-    if not new_text:
-        raise ValueError("New text cannot be empty.")
-
-    note = _resolve_note(state, id_prefix)
-    note.set_text(new_text)
-    return f"Note '{note.id_prefix()}' updated."
-
-
-@command(
-    "delete-note",
-    format="<id>",
-    help_="Delete a note. Also unlinks it from every contact it was linked to.",
-)
-@input_error
-def delete_note(args, state):
+def sort_notes(args, state):
     if not args:
-        raise ValueError("Usage: delete-note <id>")
-
-    note = _resolve_note(state, args[0])
-    contacts = getattr(state, "contacts", None)
-    if contacts is not None and hasattr(contacts, "data"):
-        for name in list(note.linked_contact_names):
-            record = contacts.find(name) if hasattr(contacts, "find") else None
-            if record is None:
-                record = contacts.data.get(name)
-            if record is not None:
-                _sync_unlink(record, note)
-
-    _ensure_notes(state).delete(note.id)
-    return f"Note '{note.id_prefix()}' deleted."
+        raise ValueError(
+            f"Usage: sort <field> [asc|desc]. Fields: {', '.join(_VALID_SORT_FIELDS)}."
+        )
+    field = args[0].lower()
+    if field not in _VALID_SORT_FIELDS:
+        raise ValueError(
+            f"Unknown sort field '{field}'. Try: {', '.join(_VALID_SORT_FIELDS)}."
+        )
+    direction = args[1].lower() if len(args) > 1 else "asc"
+    if direction not in ("asc", "desc"):
+        raise ValueError("Direction must be 'asc' or 'desc'.")
+    state.notes_sort = (field, direction == "desc")
+    return f"Sort: {field} {direction}"
 
 
 @command(
-    "find-note",
+    "find",
+    context=CTX_NOTES,
     format="<query>",
-    help_="Case-insensitive substring search across note text and tag slugs.",
+    help_text="Substring search across title and text.",
 )
 @input_error
-def find_note(args, state):
+def find_notes(args, state):
     if not args:
-        raise ValueError("Usage: find-note <query>")
-
+        raise ValueError("Usage: find <query>")
     query = " ".join(args)
-    results = _ensure_notes(state).find_by_text(query)
+    results = state.notes.search(query)
     if not results:
         return f"No notes matching '{query}'."
-    return _render_notes_table(results)
-
-
-@command("list-notes", help_="List all notes as a table.")
-@input_error
-def list_notes(args, state):
-    return render_notes_table(state.notes.data.values())
+    return render_notes_table(results)
 
 
 @command(
-    "link-note",
-    format="<id> <contact name>",
-    help_="Link an existing note to an existing contact.",
+    "filter",
+    context=CTX_NOTES,
+    format="tag <tag> | contact <name>",
+    help_text="Filter notes by tag or by linked contact.",
 )
 @input_error
-def link_note(args, state):
+def filter_notes(args, state):
+    if not args or args[0].lower() not in ("tag", "contact"):
+        raise ValueError("Usage: filter tag <tag> | filter contact <name>")
+    kind = args[0].lower()
     if len(args) < 2:
-        raise ValueError("Usage: link-note <id> <contact name>")
-
-    id_prefix, *name_parts = args
-    name = " ".join(name_parts).strip()
-    if not name:
-        raise ValueError("Contact name cannot be empty.")
-
-    contacts = getattr(state, "contacts", None)
-    if contacts is None or not hasattr(contacts, "data"):
-        raise RuntimeError("Contacts module is not loaded.")
-
-    record = contacts.find(name) if hasattr(contacts, "find") else None
-    if record is None:
-        record = contacts.data.get(name)
-    if record is None:
-        raise KeyError(name)
-
-    note = _resolve_note(state, id_prefix)
-    _sync_link(record, note)
-    return f"Linked note '{note.id_prefix()}' to contact '{record.name.value}'."
+        raise ValueError(f"Usage: filter {kind} <value>")
+    value = " ".join(args[1:])
+    if kind == "tag":
+        results = state.notes.find_by_tag(value)
+        empty = f"No notes tagged '{value.lstrip('#').lower()}'."
+    else:
+        results = state.notes.find_by_contact(value)
+        empty = f"No notes linked to '{value}'."
+    return render_notes_table(results) if results else empty
 
 
 @command(
-    "unlink-note",
-    format="<id> <contact name>",
-    help_="Remove the link between a note and a contact.",
+    "new",
+    context=CTX_NOTES,
+    format="[title]",
+    help_text="Create a new note. Prompts for title if not given, then body.",
 )
 @input_error
-def unlink_note(args, state):
-    if len(args) < 2:
-        raise ValueError("Usage: unlink-note <id> <contact name>")
+def new_note(args, state):
+    title = " ".join(args).strip() if args else ""
+    if not title:
+        got = _ask("Title: ")
+        if got is None or not got.strip():
+            return "Cancelled."
+        title = got.strip()
+    while state.notes.is_title_taken(title):
+        print(f"A note titled '{title}' already exists. Try a different title.")
+        got = _ask("Title: ")
+        if got is None or not got.strip():
+            return "Cancelled."
+        title = got.strip()
+    return _create_note_with_body(title, state)
 
-    id_prefix, *name_parts = args
-    name = " ".join(name_parts).strip()
-    if not name:
-        raise ValueError("Contact name cannot be empty.")
 
-    contacts = getattr(state, "contacts", None)
-    if contacts is None or not hasattr(contacts, "data"):
-        raise RuntimeError("Contacts module is not loaded.")
+# --- CTX_NOTE: show / edit / rename / tag / untag / link / unlink / delete ---
 
-    record = contacts.find(name) if hasattr(contacts, "find") else None
-    if record is None:
-        record = contacts.data.get(name)
-    if record is None:
-        raise KeyError(name)
+@command(
+    "show",
+    context=CTX_NOTE,
+    help_text="Show this note.",
+)
+@input_error
+def show_note(_args, state):
+    note = state.notes.find_by_title(state.entity_key)
+    if note is None:
+        raise KeyError(state.entity_key)
+    return render_note_card(note)
 
-    note = _resolve_note(state, id_prefix)
-    _sync_unlink(record, note)
-    return f"Unlinked note '{note.id_prefix()}' from contact '{record.name.value}'."
+
+def _edit_text(initial: str) -> str | None:
+    """Open multi-line editor. Returns new text or None if cancelled."""
+    try:
+        return PromptSession(multiline=True).prompt(
+            "Edit (Esc Enter to save, Ctrl-C to cancel):\n",
+            default=initial,
+        )
+    except KeyboardInterrupt:
+        return None
+    except EOFError:
+        return None
+
+
+@command(
+    "edit",
+    context=CTX_NOTE,
+    help_text="Edit the note's body in a multi-line editor.",
+)
+@input_error
+def edit_note(_args, state):
+    note = state.notes.find_by_title(state.entity_key)
+    if note is None:
+        raise KeyError(state.entity_key)
+    new_text = _edit_text(note.text)
+    if new_text is None:
+        return "Cancelled."
+    note.set_text(new_text)
+    # Re-run suggest_tags additively — manually-applied tags are never stripped.
+    known = _collect_known_tags(state)
+    for tag in suggest_tags(new_text + " " + note.title, known):
+        try:
+            note.add_tag(tag)
+        except ValueError:
+            pass
+    return "✓ Updated."
+
+
+@command(
+    "rename",
+    context=CTX_NOTE,
+    format="<new title>",
+    help_text="Rename this note.",
+)
+@input_error
+def rename_note(args, state):
+    if not args:
+        raise ValueError("Usage: rename <new title>")
+    new_title = " ".join(args).strip()
+    if not new_title:
+        raise ValueError("Note title cannot be empty.")
+    state.notes.rename(state.entity_key, new_title)
+    # `Note.set_title` already stripped; take it from the object.
+    renamed = state.notes.find_by_title(new_title)
+    state.entity_key = renamed.title if renamed else new_title
+    return "✓ Renamed."
+
+
+@command(
+    "tag",
+    context=CTX_NOTE,
+    format="<tag>",
+    help_text="Add a tag to this note.",
+)
+@input_error
+def tag_note(args, state):
+    if not args:
+        raise ValueError("Usage: tag <tag>")
+    note = state.notes.find_by_title(state.entity_key)
+    if note is None:
+        raise KeyError(state.entity_key)
+    note.add_tag(args[0])
+    return "✓ Tagged."
+
+
+@command(
+    "untag",
+    context=CTX_NOTE,
+    format="<tag>",
+    help_text="Remove a tag from this note.",
+)
+@input_error
+def untag_note(args, state):
+    if not args:
+        raise ValueError("Usage: untag <tag>")
+    note = state.notes.find_by_title(state.entity_key)
+    if note is None:
+        raise KeyError(state.entity_key)
+    note.remove_tag(args[0])
+    return "✓ Untagged."
+
+
+def _resolve_contact(name: str, state) -> str | None:
+    """Exact case-insensitive first, then fuzzy (WRatio, cutoff=80)."""
+    candidates = list(state.contacts.data.keys())
+    if not candidates:
+        return None
+    name_low = name.lower()
+    for k in candidates:
+        if k.lower() == name_low:
+            return k
+    result = process.extractOne(
+        name, candidates, scorer=fuzz.WRatio, score_cutoff=80,
+    )
+    return result[0] if result else None
+
+
+@command(
+    "link",
+    context=CTX_NOTE,
+    format="<contact>",
+    help_text="Link a contact to this note (bidirectional).",
+)
+@input_error
+def link_to_note(args, state):
+    if not args:
+        raise ValueError("Usage: link <contact>")
+    query = " ".join(args)
+    note = state.notes.find_by_title(state.entity_key)
+    if note is None:
+        raise KeyError(state.entity_key)
+    resolved = _resolve_contact(query, state)
+    if resolved is None:
+        raise ValueError(f"Contact '{query}' not found.")
+    record = state.contacts.find(resolved)
+    note.link_contact(record.name.value)
+    record.link_note(note.id)
+    return f"✓ Linked '{record.name.value}'."
+
+
+@command(
+    "unlink",
+    context=CTX_NOTE,
+    format="<contact>",
+    help_text="Unlink a contact from this note.",
+)
+@input_error
+def unlink_from_note(args, state):
+    if not args:
+        raise ValueError("Usage: unlink <contact>")
+    query = " ".join(args)
+    note = state.notes.find_by_title(state.entity_key)
+    if note is None:
+        raise KeyError(state.entity_key)
+    target = None
+    q_low = query.lower()
+    for n in note.linked_contact_names:
+        if n.lower() == q_low:
+            target = n
+            break
+    if target is None:
+        raise ValueError(f"Contact '{query}' is not linked to this note.")
+    note.unlink_contact(target)
+    record = state.contacts.find(target)
+    if record is not None:
+        record.unlink_note(note.id)
+    return f"✓ Unlinked '{target}'."
+
+
+@command(
+    "delete",
+    context=CTX_NOTE,
+    help_text="Delete this note (with confirmation).",
+)
+@input_error
+def delete_note(_args, state):
+    title = state.entity_key
+    try:
+        ans = input(f"Delete note '{title}'? (y/N): ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return "Cancelled."
+    if ans not in ("y", "yes"):
+        return "Cancelled."
+    note = state.notes.find_by_title(title)
+    if note is None:
+        raise KeyError(title)
+    for name in list(note.linked_contact_names):
+        record = state.contacts.find(name)
+        if record is not None:
+            record.unlink_note(note.id)
+    state.notes.delete_by_title(title)
+    state.go_up()
+    return f"✓ Deleted '{title}'."
