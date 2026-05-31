@@ -1,82 +1,170 @@
 # Architecture
 
-## Package map
+## Package Map
 
-```
+```text
 personal_assistant/
-├── __main__.py           # `python -m personal_assistant` entry
-├── app.py                # REPL loop + dispatch + built-in hello/help (TL)
-├── core/                 # Shared infrastructure (TL)
+├── __main__.py           # python -m personal_assistant entry
+├── app.py                # REPL loop, context dispatch, global navigation
+├── seed.py               # demo data loader
+├── core/                 # shared infrastructure
 │   ├── fields.py         # Field base class
 │   ├── decorators.py     # @input_error
-│   ├── registry.py       # @command + COMMAND_REGISTRY (flat dict)
-│   ├── storage.py        # Storage ABC + PickleStorage (atomic)
+│   ├── registry.py       # context-aware @command registry
+│   ├── storage.py        # PickleStorage
 │   ├── paths.py          # ~/.personal-assistant/* paths
-│   └── state.py          # AppState dataclass
-├── contacts/             # Contacts module (TL)
-│   ├── fields.py         # Name, Phone, Email, Address, Birthday, Tag
-│   ├── record.py         # Record
-│   ├── book.py           # ContactsBook(UserDict[str, Record])
-│   └── handlers.py       # add-contact, edit-contact, ...
-├── notes/                # Notes module (Person 2)
-│   ├── note.py           # Note (UUID, text, tags, links, timestamps)
-│   ├── book.py           # NotesBook(UserDict[UUID, Note])
-│   ├── tagger.py         # auto-extract tags from text
-│   ├── text_parser.py    # extract phones/names, suggest links
-│   └── handlers.py       # add-note, find-note, link-note, ...
-├── tags/                 # Tags module (Person 3) — virtual, no separate file
-│   ├── aggregator.py     # collect_tags(state) — walks both books
-│   └── handlers.py       # list-tags, find-by-tag, rename-tag, merge-tags
-└── ui/                   # UI helpers
-    ├── parser.py         # parse_input (TL→P4)
-    ├── completer.py      # WordCompleter + bottom toolbar (TL)
-    ├── fuzzy.py          # suggest_command — rapidfuzz wrapper (TL)
-    ├── tables.py         # rich.Table renderers (P4)
-    └── help.py           # autogen help from registry (P4)
+│   └── state.py          # AppState: books + module/entity context
+├── contacts/             # contact fields, records, book, context commands
+├── notes/                # note model, book, parser/tagger, context commands
+├── tags/                 # virtual tag aggregation and tag context commands
+└── ui/                   # tokenizer, completer, fuzzy, help, Rich views
 ```
 
-## Command dispatch
+Launcher scripts:
 
-Flat. Each handler registers itself with `@command(name, aliases=..., format=..., help_=...)`. `app.py` looks up by lowercased first token; on miss, suggests via fuzzy.
-
-```
-user input → parse_input → (cmd, args)
-                              │
-                              ▼
-                      COMMAND_REGISTRY[cmd]?
-                       ├── yes → handler(args, state) → response string
-                       └── no  → suggest_command(...) → "Did you mean ...?"
+```text
+personal-assistance.sh
+personal-assistance.bat
 ```
 
-## Data flow
+## Context Model
 
+The REPL is context-aware. `AppState` stores:
+
+- `contacts`: contacts book
+- `notes`: notes book
+- `module`: `contacts`, `notes`, `tags`, or `None`
+- `entity_key`: active contact name, note title, tag name, or `None`
+
+The prompt is derived from that state:
+
+```text
+>                         # root
+contacts>                 # module
+notes/Project kickoff>    # entity
 ```
-PromptSession      ← reads keystrokes, runs WordCompleter on Tab,
-   │                  pulls bottom_toolbar(text) on each render
-   ▼
-app._dispatch ────► handler(args, state)
-                          │
-                          ├─ mutates state.contacts / state.notes
-                          └─ returns response string
 
-on exit:
-   PickleStorage.save(state.contacts, contacts_path())
-   PickleStorage.save(state.notes,    notes_path())
+Navigation commands:
+
+- `contacts`, `notes`, `tags`: enter a module from root.
+- `..`: move one level up.
+- `/`: return to root.
+- `exit`, `quit`, `q`: save and close.
+
+## Command Registry
+
+Each handler registers for a concrete context:
+
+```text
+root
+contacts
+contacts/*
+notes
+notes/*
+tags
+tags/*
 ```
 
-## M:N contacts ↔ notes
+`core.registry.REGISTRY` maps context names to command dictionaries. Aliases point to the same `Command` object. `commands_for(context)` returns unique primary commands for help and completion.
 
-A `Record` holds `linked_note_ids: list[UUID]`. A `Note` holds
-`linked_contact_names: list[str]`. Both sides must be updated in sync.
-The team agrees: a single service function
-`link_note(record, note)` in `contacts/book.py` mutates both. Handlers
-on either side call that function — they never edit the other side's
-list directly.
+## Dispatch Flow
 
-## Tags as a virtual module
+```text
+user input
+  |
+  v
+ui.parser.tokenize(line)
+  |
+  v
+global command? ---- yes ---> help/navigation/exit
+  |
+  no
+  |
+  v
+REGISTRY[state.context][first_token]?
+  | yes
+  v
+handler(args, state) -> response
+  |
+  no
+  |
+  v
+module entity-enter?
+  | yes -> state.enter_entity(...) -> auto show entity card
+  | no  -> fuzzy command suggestion or unknown-command message
+```
 
-`tags/` does **not** have its own pickle file. `tags/aggregator.py`
-provides `collect_tags(state)` which walks both books on demand and
-returns a list of unique tag names. `rename-tag` and `merge-tag` are
-bulk updates: they iterate both books and replace the tag in every
-record and note that uses it.
+## Entity Enter
+
+Inside `contacts>`, `notes>`, or `tags>`, typing an existing entity name/title/tag opens that entity. Exact case-insensitive matches are preferred. Substring and fuzzy matches are used when appropriate. Multiple matches return a numbered list instead of guessing.
+
+If no contact or note matches, the app may offer to create a new entity.
+
+## Data Flow
+
+```text
+Application start
+  |
+  v
+PickleStorage.load contacts.pkl + notes.pkl
+  |
+  v
+AppState
+  |
+  v
+Context handlers mutate contacts / notes / tags
+  |
+  v
+Application exit
+  |
+  v
+PickleStorage.save contacts.pkl + notes.pkl
+```
+
+Storage location:
+
+```text
+~/.personal-assistant/
+  contacts.pkl
+  notes.pkl
+```
+
+## Contacts And Notes
+
+Contacts are keyed by contact name. Notes are keyed by normalized title for user-facing entity navigation and keep a stable UUID internally.
+
+Relationships are many-to-many:
+
+```text
+Record.linked_note_ids      links with      Note.linked_contact_names
+```
+
+Handlers keep both sides synchronized when linking, unlinking, deleting, or renaming relevant data.
+
+## Tags
+
+Tags are virtual. There is no separate tag pickle file. The tags module aggregates tags from contacts and notes on demand.
+
+Supported tag operations include:
+
+- list and sort tag usage
+- find tags
+- open tag entity
+- list contacts/notes for a tag
+- rename tags across contacts and notes
+- merge tags
+- delete tags from all entities
+
+## UI Helpers
+
+The `ui/` package owns presentation and input assistance:
+
+- `parser.py`: quote-aware tokenization
+- `completer.py`: context-aware command and entity completion
+- `fuzzy.py`: command suggestions and entity matching
+- `help.py`: context help from registry
+- `views.py` / `tables.py`: Rich table and card rendering
+
+## Demo Seed
+
+`python -m personal_assistant.seed --force` writes a repeatable demo dataset: 15 contacts, 15 notes, shared tags, links, and useful birthday dates. It overwrites the local pickle files, so it is intended for demo/review setup rather than normal user operation.
