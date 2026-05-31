@@ -43,6 +43,7 @@ def _ask(prompt: str) -> str | None:
 
 # --- root: enter --------------------------------------------------------------
 
+
 @command(
     "contacts",
     context=CTX_ROOT,
@@ -55,6 +56,7 @@ def enter_contacts(_args, state):
 
 
 # --- shared creation path -----------------------------------------------------
+
 
 @input_error
 def create_contact_from_input(query: str, state) -> str:
@@ -73,6 +75,7 @@ def create_contact_from_input(query: str, state) -> str:
 
 
 # --- contacts: list / sort / find / filter / new -----------------------------
+
 
 @command(
     "list",
@@ -163,6 +166,7 @@ def new_contact(args, state):
 
 # --- contact entity: show / notes / delete -----------------------------------
 
+
 @command(
     "show",
     context=CTX_CONTACT,
@@ -216,8 +220,10 @@ def _print_main_menu(record: Record) -> None:
     print(f"  3) email     {record.email.value if record.email else '—'}")
     print(f"  4) address   {record.address.value if record.address else '—'}")
     print(f"  5) birthday  {record.birthday if record.birthday else '—'}")
-    print(f"  6) tags      "
-          f"{', '.join(t.value for t in record.tags) if record.tags else '—'}")
+    print(
+        f"  6) tags      "
+        f"{', '.join(t.value for t in record.tags) if record.tags else '—'}"
+    )
     print("  0) cancel")
 
 
@@ -233,8 +239,7 @@ def _rename_contact(record: Record, new_name: str, state) -> str:
     record.name = Name(new_name)
     # UserDict preserves insertion order; rebuild dict to keep position.
     state.contacts.data = {
-        (new_name if k == old_name else k): v
-        for k, v in state.contacts.data.items()
+        (new_name if k == old_name else k): v for k, v in state.contacts.data.items()
     }
     state.entity_key = new_name
     return f"✓ Renamed: '{old_name}' → '{new_name}'."
@@ -479,15 +484,19 @@ def edit_contact(args, state):
         if rest:
             return _tags_shortcut(record, rest)
         return _tags_submenu(record)
-    raise ValueError(
-        f"Unknown field '{field}'. Try: {', '.join(_FIELD_LABELS)}."
-    )
+    raise ValueError(f"Unknown field '{field}'. Try: {', '.join(_FIELD_LABELS)}.")
 
 
 # --- cross-cutting commands (registered in multiple contexts) ----------------
 
 _WEEKDAYS = (
-    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
 )
 
 
@@ -498,6 +507,7 @@ def _weekday_name(date_str: str) -> str:
     the system locale.
     """
     from datetime import datetime
+
     return _WEEKDAYS[datetime.strptime(date_str, "%d.%m.%Y").weekday()]
 
 
@@ -530,6 +540,7 @@ def birthdays_cmd(args, state):
 
     from rich.console import Console
     from rich.table import Table
+
     table = Table(show_header=True, header_style="bold")
     table.add_column("Name")
     table.add_column("Congratulation date")
@@ -569,9 +580,7 @@ def search_cmd(args, state):
         raise ValueError("Usage: search <query>")
     query = " ".join(args)
     contacts_results = state.contacts.search(query)
-    # NotesBook.search arrives in Card 21; guard until then.
-    notes_search = getattr(state.notes, "search", None)
-    notes_results = notes_search(query) if notes_search else []
+    notes_results = state.notes.search(query)
     parts: list[str] = []
     parts.append(f"Contacts ({len(contacts_results)}):")
     parts.append(
@@ -579,9 +588,7 @@ def search_cmd(args, state):
     )
     parts.append("")
     parts.append(f"Notes ({len(notes_results)}):")
-    parts.append(
-        render_notes_table(notes_results) if notes_results else "  (none)"
-    )
+    parts.append(render_notes_table(notes_results) if notes_results else "  (none)")
     return "\n".join(parts)
 
 

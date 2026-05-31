@@ -1,9 +1,9 @@
 """REPL loop.
 
-All I/O lives here (except the interactive `edit`/`new` menus in later
-cards — there handlers may read extra input). The dispatcher selects a
-command by the current context, adding global navigation, entity-enter
-inside modules, and a fuzzy "did you mean?" fallback.
+All I/O lives here (except the interactive `edit`/`new` menus — those
+handlers may read extra input). The dispatcher selects a command by the
+current context, adding global navigation, entity-enter inside modules,
+and a fuzzy "did you mean?" fallback.
 """
 
 from __future__ import annotations
@@ -43,7 +43,6 @@ def _entities_for_module(state: AppState) -> list[str]:
         return [n.title for n in state.notes.data.values()]
     if state.context == CTX_TAGS:
         from personal_assistant.tags.aggregator import collect_tags
-
         return [t.name for t in collect_tags(state)]
     return []
 
