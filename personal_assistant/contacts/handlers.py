@@ -190,7 +190,6 @@ def contact_notes(_args, state):
     record = state.contacts.find(state.entity_key)
     if record is None:
         raise KeyError(state.entity_key)
-    # NotesBook.find_by_uuid arrives in Card 22.
     finder = getattr(state.notes, "find_by_uuid", None)
     if finder is None or not record.linked_note_ids:
         return "Notes module not ready yet." if finder is None else "No linked notes."
