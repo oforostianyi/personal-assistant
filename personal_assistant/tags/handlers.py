@@ -90,6 +90,52 @@ def _notes_with_tag(state, tag_value: str) -> list:
     return notes
 
 
+def _replace_tag(state, old_value: str, new_value: str) -> tuple[int, int]:
+    """Replace old_value with new_value across contacts and notes."""
+    contacts_affected = 0
+    notes_affected = 0
+
+    for record in _book_values(getattr(state, "contacts", None)):
+        tags = getattr(record, "tags", None)
+        if tags is None:
+            continue
+        if not any(getattr(tag, "value", None) == old_value for tag in tags):
+            continue
+
+        kept = [
+            tag
+            for tag in tags
+            if getattr(tag, "value", None) != old_value
+        ]
+        if not any(getattr(tag, "value", None) == new_value for tag in kept):
+            kept.append(Tag(new_value))
+        record.tags = kept
+        contacts_affected += 1
+
+    for note in _book_values(getattr(state, "notes", None)):
+        tags = getattr(note, "tags", None)
+        if tags is None:
+            continue
+        if not any(getattr(tag, "value", None) == old_value for tag in tags):
+            continue
+
+        kept = [
+            tag
+            for tag in tags
+            if getattr(tag, "value", None) != old_value
+        ]
+        if not any(getattr(tag, "value", None) == new_value for tag in kept):
+            kept.append(Tag(new_value))
+        note.tags = kept
+
+        touch = getattr(note, "touch", None)
+        if callable(touch):
+            touch()
+        notes_affected += 1
+
+    return contacts_affected, notes_affected
+
+
 @command(
     "list-tags",
     aliases=("tags-list",),
@@ -128,3 +174,66 @@ def find_by_tag(args, state):
     if not contacts and not notes:
         return f"Nothing tagged '{tag_value}'."
     return _render_find_result(tag_value, contacts, notes)
+
+
+@command(
+    "rename-tag",
+    format="<old> <new>",
+    aliases=("tag-rename",),
+    help_="Rename a tag everywhere across contacts and notes.",
+)
+@input_error
+def rename_tag(args, state):
+    if len(args) < 2:
+        raise ValueError("Usage: rename-tag <old> <new>")
+
+    old_value = Tag(args[0]).value
+    new_value = Tag(args[1]).value
+    if old_value == new_value:
+        return f"Nothing to do: '{old_value}' is the same as '{new_value}'."
+
+    contacts_affected, notes_affected = _replace_tag(state, old_value, new_value)
+    if contacts_affected == 0 and notes_affected == 0:
+        return f"No items tagged '{old_value}'."
+
+    contact_word = "contacts" if contacts_affected != 1 else "contact"
+    note_word = "notes" if notes_affected != 1 else "note"
+    return (
+        f"Renamed '{old_value}' -> '{new_value}'. "
+        f"Affected: {contacts_affected} {contact_word}, "
+        f"{notes_affected} {note_word}."
+    )
+
+
+@command(
+    "merge-tags",
+    format="<t1> <t2>",
+    aliases=("tags-merge",),
+    help_="Merge <t1> into <t2> across contacts and notes.",
+)
+@input_error
+def merge_tags(args, state):
+    if len(args) < 2:
+        raise ValueError("Usage: merge-tags <t1> <t2>")
+
+    source_value = Tag(args[0]).value
+    target_value = Tag(args[1]).value
+    if source_value == target_value:
+        raise ValueError("Cannot merge a tag with itself.")
+
+    contacts_affected, notes_affected = _replace_tag(
+        state,
+        source_value,
+        target_value,
+    )
+    if contacts_affected == 0 and notes_affected == 0:
+        return f"No items tagged '{source_value}'. Nothing merged."
+
+    total = len(_records_with_tag(state, target_value)) + len(
+        _notes_with_tag(state, target_value)
+    )
+    usage_word = "usages" if total != 1 else "usage"
+    return (
+        f"Merged '{source_value}' into '{target_value}'. "
+        f"Now '{target_value}' has {total} {usage_word}."
+    )
