@@ -10,6 +10,7 @@ from personal_assistant.notes.book import NotesBook
 from personal_assistant.notes.note import Note
 from personal_assistant.notes.tagger import extract_tags
 from personal_assistant.notes.text_parser import extract_phones, suggest_contacts
+from personal_assistant.ui.tables import render_notes_table
 
 if TYPE_CHECKING:
     from personal_assistant.contacts.record import Record
@@ -23,8 +24,7 @@ def _ensure_notes(state) -> NotesBook:
         state.notes = NotesBook()
         return state.notes
     raise RuntimeError(
-        "Notes storage is in an unexpected state. "
-        "Ask the TL to apply the Card 09 integration step in app.py."
+        "Notes storage is in an unexpected state."
     )
 
 
@@ -79,14 +79,14 @@ def _render_notes_table(notes: list[Note]) -> str:
     lines = [header, sep]
     for note in notes:
         tags = ", ".join(tag.value for tag in note.tags) if note.tags else "-"
-        linked = ", ".join(note.linked_contact_names) if note.linked_contact_names else "-"
+        linked = (
+            ", ".join(note.linked_contact_names) if note.linked_contact_names else "-"
+        )
         if len(tags) > 14:
             tags = tags[:13] + "..."
         if len(linked) > 30:
             linked = linked[:29] + "..."
-        lines.append(
-            f"{note.id_prefix():<10}{note.preview(60):<62}{tags:<16}{linked}"
-        )
+        lines.append(f"{note.id_prefix():<10}{note.preview(60):<62}{tags:<16}{linked}")
     return "\n".join(lines)
 
 
@@ -187,10 +187,10 @@ def find_note(args, state):
     return _render_notes_table(results)
 
 
-@command("list-notes", help_="Show all notes as a table.")
+@command("list-notes", help_="List all notes as a table.")
 @input_error
-def list_notes(_args, state):
-    return _render_notes_table(_ensure_notes(state).list_all())
+def list_notes(args, state):
+    return render_notes_table(state.notes.data.values())
 
 
 @command(

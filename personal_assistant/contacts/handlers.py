@@ -11,10 +11,6 @@ Commands registered:
   find-contact <query>
   list-contacts
   birthdays [days]
-
-Until ui/tables.py (Card 13) lands, list rendering uses an inline simple text
-table. After Card 13 merges, refactor list-contacts and birthdays to call
-ui.tables.render_contacts_table / ui.tables.render_birthdays_table.
 """
 
 from __future__ import annotations
@@ -23,9 +19,8 @@ from personal_assistant.contacts.book import ContactsBook
 from personal_assistant.contacts.record import Record
 from personal_assistant.core.decorators import input_error
 from personal_assistant.core.registry import command
+from personal_assistant.ui.tables import render_contacts_table
 
-
-# --- inline rendering helpers (replaced by ui.tables after Card 13) ----------
 
 def _truncate(s: str, n: int = 60) -> str:
     return s if len(s) <= n else s[: n - 1] + "…"
@@ -60,8 +55,16 @@ def _render_birthdays_text_table(items: list[dict]) -> str:
     sep = "-" * len(header)
     lines = [header, sep]
     from datetime import datetime
-    weekdays = ("Monday", "Tuesday", "Wednesday", "Thursday",
-                "Friday", "Saturday", "Sunday")
+
+    weekdays = (
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    )
     for item in items:
         dt = datetime.strptime(item["congratulation_date"], "%d.%m.%Y")
         wd = weekdays[dt.weekday()]
@@ -74,6 +77,7 @@ def _render_birthdays_text_table(items: list[dict]) -> str:
 
 
 # --- commands ---------------------------------------------------------------
+
 
 @command(
     "add-contact",
@@ -88,7 +92,9 @@ def add_contact(args, state):
     if not isinstance(state.contacts, ContactsBook):
         state.contacts = ContactsBook()
     if state.contacts.find(name) is not None:
-        raise ValueError(f"Contact '{name}' already exists. Use edit-contact to update.")
+        raise ValueError(
+            f"Contact '{name}' already exists. Use edit-contact to update."
+        )
     record = Record(name)
     record.add_phone(phone)
     state.contacts.add_record(record)
@@ -163,16 +169,10 @@ def find_contact(args, state):
     return _render_contacts_text_table(results)
 
 
-@command(
-    "list-contacts",
-    help_="List all contacts.",
-)
+@command("list-contacts", help_="List all contacts as a table.")
 @input_error
-def list_contacts(_args, state):
-    if not state.contacts or not getattr(state.contacts, "data", {}):
-        return "Contacts book is empty."
-    records = state.contacts.sorted_by("name") if hasattr(state.contacts, "sorted_by") else list(state.contacts.data.values())
-    return _render_contacts_text_table(records)
+def list_contacts(args, state):
+    return render_contacts_table(state.contacts.data.values())
 
 
 @command(

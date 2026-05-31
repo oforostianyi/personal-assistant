@@ -12,11 +12,16 @@ from typing import Iterable
 from rapidfuzz import fuzz, process
 
 
-def suggest_command(token: str, candidates: Iterable[str], cutoff: int = 60) -> str | None:
+def suggest_command(
+    token: str, candidates: Iterable[str], cutoff: int = 60
+) -> str | None:
     candidates = list(candidates)
     if not token or not candidates:
         return None
     result = process.extractOne(
-        token, candidates, scorer=fuzz.ratio, score_cutoff=cutoff,
+        token,
+        candidates,
+        scorer=fuzz.ratio,
+        score_cutoff=cutoff,
     )
     return result[0] if result else None

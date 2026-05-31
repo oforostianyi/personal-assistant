@@ -1,1 +1,1 @@
-"""Notes module — owned by Person 2. See docs/module-briefs/notes.md."""
+"""Notes module."""

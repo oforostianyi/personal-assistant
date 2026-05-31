@@ -52,9 +52,7 @@ def render_contacts_table(records: "Iterable[Record]") -> str:
 
     for record in records:
         phones = (
-            "; ".join(phone.value for phone in record.phones)
-            if record.phones
-            else "—"
+            "; ".join(phone.value for phone in record.phones) if record.phones else "—"
         )
         email = record.email.value if record.email else "—"
         address = record.address.value if record.address else "—"
@@ -119,9 +117,7 @@ def render_notes_table(notes: "Iterable[Note]") -> str:
         note_id = note.id.hex[:8] if hasattr(note.id, "hex") else str(note.id)[:8]
         tags = ", ".join(tag.value for tag in note.tags) if note.tags else "—"
         linked = (
-            ", ".join(note.linked_contact_names)
-            if note.linked_contact_names
-            else "—"
+            ", ".join(note.linked_contact_names) if note.linked_contact_names else "—"
         )
         updated = note.updated_at.strftime("%Y-%m-%d") if note.updated_at else "—"
         table.add_row(
@@ -146,14 +142,16 @@ def render_note_card(note: "Note") -> str:
     if note.updated_at and note.updated_at != note.created_at:
         lines.append(f"Updated:   {note.updated_at.strftime('%Y-%m-%d %H:%M')}")
 
-    lines.extend([
-        "",
-        note.text if note.text else "(empty body)",
-        "",
-        f"Tags:      {', '.join(tag.value for tag in note.tags) if note.tags else '—'}",
-        "Linked:    "
-        f"{', '.join(note.linked_contact_names) if note.linked_contact_names else '—'}",
-    ])
+    lines.extend(
+        [
+            "",
+            note.text if note.text else "(empty body)",
+            "",
+            f"Tags:      {', '.join(tag.value for tag in note.tags) if note.tags else '—'}",
+            "Linked:    "
+            f"{', '.join(note.linked_contact_names) if note.linked_contact_names else '—'}",
+        ]
+    )
     return "\n".join(lines)
 
 
