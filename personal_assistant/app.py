@@ -25,8 +25,7 @@ from personal_assistant.core.registry import (
 from personal_assistant.core.state import AppState
 from personal_assistant.core.storage import PickleStorage
 from personal_assistant.notes.book import NotesBook
-
-# from personal_assistant.notes.handlers import create_note_from_input  # TODO(card-22)
+from personal_assistant.notes.handlers import create_note_from_input
 from personal_assistant.ui.completer import ContextCompleter
 from personal_assistant.ui.fuzzy import fuzzy_match_all, suggest_command
 from personal_assistant.ui.help import render_help
@@ -102,8 +101,8 @@ def _try_enter_entity(line: str, state: AppState) -> str | None:
             return create_contact_from_input(query, state)
         return ""
     if state.context == CTX_NOTES:
-        # if _confirm_create(query, "note"):                 # TODO(card-22)
-        #     return create_note_from_input(query, state)     # TODO(card-22)
+        if _confirm_create(query, "note"):
+            return create_note_from_input(query, state)
         return ""
     return None
 

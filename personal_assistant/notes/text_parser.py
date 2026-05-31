@@ -1,4 +1,10 @@
-"""Lightweight extractors for actionable hints in note text."""
+"""Phone extraction and contact suggestion from note text.
+
+`extract_phones` — exactly 10 digits, like our Phone validator.
+`suggest_contacts` — find capitalized tokens and fuzzy-match contact names.
+partial_ratio is intentional: a note may mention only a first name ("Alex")
+while the contact is stored as "Alex Petrenko" — partial_ratio scores high.
+"""
 
 from __future__ import annotations
 
@@ -7,69 +13,50 @@ from typing import TYPE_CHECKING
 
 from rapidfuzz import fuzz, process
 
-from personal_assistant.contacts.fields import Phone
-
 if TYPE_CHECKING:
     from personal_assistant.contacts.book import ContactsBook
 
 
 _PHONE_RE = re.compile(r"\b\d{10}\b")
-_INTL_PHONE_RE = re.compile(r"\b380\d{9}\b")
-_NAME_TOKEN_RE = re.compile(r"\b[A-ZА-ЯЇІЄҐ][a-zа-яїієґ0-9_-]{1,}\b")
-
-_FUZZY_CUTOFF = 80
+_NAME_TOKEN_RE = re.compile(
+    r"\b[A-ZА-ЯЇІЄҐ][a-zа-яїієґ0-9_-]+\b",
+)
 
 
 def extract_phones(text: str) -> list[str]:
-    """Return canonical 10-digit phone numbers found in text.
-
-    Values are normalized through the shared Phone field, deduplicated after
-    normalization, and returned in first-appearance order.
-    """
-    if not text:
-        return []
-
-    matches = sorted(
-        [*_INTL_PHONE_RE.finditer(text), *_PHONE_RE.finditer(text)],
-        key=lambda match: match.start(),
-    )
+    """Unique 10-digit sequences, in first-appearance order."""
     seen: set[str] = set()
-    phones: list[str] = []
-
-    for match in matches:
-        try:
-            canonical = Phone(match.group()).value
-        except ValueError:
-            continue
-        if canonical not in seen:
-            seen.add(canonical)
-            phones.append(canonical)
-
-    return phones
+    out: list[str] = []
+    for m in _PHONE_RE.finditer(text):
+        v = m.group()
+        if v not in seen:
+            out.append(v)
+            seen.add(v)
+    return out
 
 
 def suggest_contacts(
     text: str,
-    contacts_book: "ContactsBook",
-    cutoff: int = _FUZZY_CUTOFF,
+    contacts: "ContactsBook",
+    cutoff: int = 80,
 ) -> list[str]:
-    """Return sorted contact names plausibly mentioned in text."""
-    if not text:
-        return []
-
-    candidates = list(getattr(contacts_book, "data", {}).keys())
+    """Contact names that are likely mentioned in the text."""
+    candidates = list(contacts.data.keys())
     if not candidates:
         return []
-
-    matched: set[str] = set()
-    for match in _NAME_TOKEN_RE.finditer(text):
-        result = process.extractOne(
-            match.group(),
+    seen: set[str] = set()
+    out: list[str] = []
+    for m in _NAME_TOKEN_RE.finditer(text):
+        token = m.group()
+        match = process.extractOne(
+            token,
             candidates,
-            scorer=fuzz.WRatio,
+            scorer=fuzz.partial_ratio,
             score_cutoff=cutoff,
         )
-        if result is not None:
-            matched.add(result[0])
-
-    return sorted(matched)
+        if match:
+            name = match[0]
+            if name not in seen:
+                out.append(name)
+                seen.add(name)
+    return out
