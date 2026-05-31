@@ -21,7 +21,6 @@ from personal_assistant.core.registry import (
     CTX_CONTACTS,
     CTX_NOTE,
     CTX_NOTES,
-    CTX_TAG,
     CTX_TAGS,
     REGISTRY,
 )
