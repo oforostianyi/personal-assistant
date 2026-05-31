@@ -1,230 +1,238 @@
-"""Tag commands for the flat command registry."""
+"""Tags module commands.
+
+CTX_ROOT : `tags` — enter the module.
+CTX_TAGS : list / sort / find.
+CTX_TAG  : show (auto-show) / contacts / notes / rename / merge / delete.
+
+All rename/merge/delete are bulk operations across both books via
+`tags/aggregator.py`. There is no separate pickle for tags.
+"""
 
 from __future__ import annotations
 
 from personal_assistant.contacts.fields import Tag
 from personal_assistant.core.decorators import input_error
-from personal_assistant.core.registry import command
-from personal_assistant.tags.aggregator import TagInfo, collect_tags
-from personal_assistant.ui.tables import render_tags_table
+from personal_assistant.core.registry import (
+    CTX_ROOT,
+    CTX_TAG,
+    CTX_TAGS,
+    command,
+)
+from personal_assistant.tags.aggregator import (
+    TagInfo,
+    collect_tags,
+    delete_tag,
+    find_tag,
+    merge_tag,
+    rename_tag,
+)
+from personal_assistant.ui.views import (
+    render_contacts_table,
+    render_notes_table,
+    render_tag_card,
+    render_tags_table,
+)
+
+_VALID_TAG_SORT_FIELDS = ("name", "usage", "contacts", "notes")
 
 
-def _render_tag_list(infos: list[TagInfo]) -> str:
-    """Render tag usage counts as a plain text table."""
+# --- root: enter ----------------------------------------------------------
+
+@command(
+    "tags",
+    context=CTX_ROOT,
+    help_text="Enter the tags module.",
+)
+@input_error
+def enter_tags(_args, state):
+    state.enter_module("tags")
+    return ""
+
+
+# --- sort helper ----------------------------------------------------------
+
+def _sort_tags(infos: list[TagInfo], field: str, reverse: bool) -> list[TagInfo]:
+    keys = {
+        "name": lambda t: t.name,
+        "usage": lambda t: t.total,
+        "contacts": lambda t: t.contact_count,
+        "notes": lambda t: t.note_count,
+    }
+    if field not in keys:
+        raise ValueError(
+            f"Cannot sort by '{field}'. Available: {', '.join(_VALID_TAG_SORT_FIELDS)}."
+        )
+    return sorted(infos, key=keys[field], reverse=reverse)
+
+
+# --- CTX_TAGS -------------------------------------------------------------
+
+@command(
+    "list",
+    context=CTX_TAGS,
+    help_text="List all tags with usage counts.",
+)
+@input_error
+def list_tags_cmd(_args, state):
+    infos = collect_tags(state)
     if not infos:
         return "No tags yet."
-
-    headers = ("Tag", "Contacts", "Notes", "Total")
-    rows = [
-        (info.name, str(info.contact_count), str(info.note_count), str(info.total))
-        for info in infos
-    ]
-    widths = [
-        max(len(header), *(len(row[index]) for row in rows))
-        for index, header in enumerate(headers)
-    ]
-
-    def line(cells: tuple[str, ...]) -> str:
-        return "  ".join(
-            cells[index].ljust(widths[index]) for index in range(len(headers))
-        )
-
-    return "\n".join([line(headers), *(line(row) for row in rows)])
-
-
-def _render_find_result(tag_name: str, contacts: list, notes: list) -> str:
-    """Render contacts and notes carrying a tag."""
-    parts: list[str] = [f"Contacts ({len(contacts)}):"]
-
-    if contacts:
-        for record in contacts:
-            phones = "; ".join(
-                getattr(phone, "value", str(phone)) for phone in record.phones
-            )
-            parts.append(f"  {record.name.value} ({phones or 'no phones'})")
-    else:
-        parts.append("  (none)")
-
-    parts.append(f"Notes ({len(notes)}):")
-    if notes:
-        for note in notes:
-            uid = getattr(note, "id", None)
-            uid_short = uid.hex[:8] if uid is not None else "-"
-            text = " ".join((getattr(note, "text", "") or "").split())
-            preview = text if len(text) <= 60 else text[:57] + "..."
-            parts.append(f"  [{uid_short}] {preview}")
-    else:
-        parts.append("  (none)")
-
-    return "\n".join(parts)
-
-
-def _book_values(book):
-    """Iterate values from a UserDict-backed book, plain dict, or iterable."""
-    if book is None:
-        return ()
-
-    data = getattr(book, "data", None)
-    if data is not None:
-        return data.values()
-
-    if isinstance(book, dict):
-        return book.values()
-
-    return book
-
-
-def _records_with_tag(state, tag_value: str) -> list:
-    records = []
-    for record in _book_values(getattr(state, "contacts", None)):
-        tags = getattr(record, "tags", None) or ()
-        if any(getattr(tag, "value", None) == tag_value for tag in tags):
-            records.append(record)
-    return records
-
-
-def _notes_with_tag(state, tag_value: str) -> list:
-    notes = []
-    for note in _book_values(getattr(state, "notes", None)):
-        tags = getattr(note, "tags", None) or ()
-        if any(getattr(tag, "value", None) == tag_value for tag in tags):
-            notes.append(note)
-    return notes
-
-
-def _replace_tag(state, old_value: str, new_value: str) -> tuple[int, int]:
-    """Replace old_value with new_value across contacts and notes."""
-    contacts_affected = 0
-    notes_affected = 0
-
-    for record in _book_values(getattr(state, "contacts", None)):
-        tags = getattr(record, "tags", None)
-        if tags is None:
-            continue
-        if not any(getattr(tag, "value", None) == old_value for tag in tags):
-            continue
-
-        kept = [tag for tag in tags if getattr(tag, "value", None) != old_value]
-        if not any(getattr(tag, "value", None) == new_value for tag in kept):
-            kept.append(Tag(new_value))
-        record.tags = kept
-        contacts_affected += 1
-
-    for note in _book_values(getattr(state, "notes", None)):
-        tags = getattr(note, "tags", None)
-        if tags is None:
-            continue
-        if not any(getattr(tag, "value", None) == old_value for tag in tags):
-            continue
-
-        kept = [tag for tag in tags if getattr(tag, "value", None) != old_value]
-        if not any(getattr(tag, "value", None) == new_value for tag in kept):
-            kept.append(Tag(new_value))
-        note.tags = kept
-
-        touch = getattr(note, "touch", None)
-        if callable(touch):
-            touch()
-        notes_affected += 1
-
-    return contacts_affected, notes_affected
-
-
-@command("list-tags", help_="List all tags with usage counts.")
-@input_error
-def list_tags(args, state):
-    infos = sorted(collect_tags(state), key=lambda t: t.name)
-    return render_tags_table(infos)
+    field, reverse = state.tags_sort
+    return render_tags_table(_sort_tags(infos, field, reverse))
 
 
 @command(
-    "sort-by-tag",
-    aliases=("tags-sort",),
-    help_="List tags sorted by total usage.",
+    "sort",
+    context=CTX_TAGS,
+    format="<field> [asc|desc]",
+    help_text="Set the sort key for `list`.",
 )
 @input_error
-def sort_by_tag(_args, state):
-    infos = sorted(collect_tags(state), key=lambda info: (-info.total, info.name))
-    return _render_tag_list(infos)
-
-
-@command(
-    "find-by-tag",
-    format="<tag>",
-    aliases=("tag-find",),
-    help_="Show contacts and notes that use the given tag.",
-)
-@input_error
-def find_by_tag(args, state):
+def sort_tags_cmd(args, state):
     if not args:
-        raise ValueError("Usage: find-by-tag <tag>")
-
-    tag_value = Tag(args[0]).value
-    contacts = _records_with_tag(state, tag_value)
-    notes = _notes_with_tag(state, tag_value)
-    if not contacts and not notes:
-        return f"Nothing tagged '{tag_value}'."
-    return _render_find_result(tag_value, contacts, notes)
-
-
-@command(
-    "rename-tag",
-    format="<old> <new>",
-    aliases=("tag-rename",),
-    help_="Rename a tag everywhere across contacts and notes.",
-)
-@input_error
-def rename_tag(args, state):
-    if len(args) < 2:
-        raise ValueError("Usage: rename-tag <old> <new>")
-
-    old_value = Tag(args[0]).value
-    new_value = Tag(args[1]).value
-    if old_value == new_value:
-        return f"Nothing to do: '{old_value}' is the same as '{new_value}'."
-
-    contacts_affected, notes_affected = _replace_tag(state, old_value, new_value)
-    if contacts_affected == 0 and notes_affected == 0:
-        return f"No items tagged '{old_value}'."
-
-    contact_word = "contacts" if contacts_affected != 1 else "contact"
-    note_word = "notes" if notes_affected != 1 else "note"
-    return (
-        f"Renamed '{old_value}' -> '{new_value}'. "
-        f"Affected: {contacts_affected} {contact_word}, "
-        f"{notes_affected} {note_word}."
-    )
+        raise ValueError(
+            f"Usage: sort <field> [asc|desc]. Fields: "
+            f"{', '.join(_VALID_TAG_SORT_FIELDS)}."
+        )
+    field = args[0].lower()
+    if field not in _VALID_TAG_SORT_FIELDS:
+        raise ValueError(
+            f"Unknown sort field '{field}'. Try: "
+            f"{', '.join(_VALID_TAG_SORT_FIELDS)}."
+        )
+    direction = args[1].lower() if len(args) > 1 else "asc"
+    if direction not in ("asc", "desc"):
+        raise ValueError("Direction must be 'asc' or 'desc'.")
+    state.tags_sort = (field, direction == "desc")
+    return f"Sort: {field} {direction}"
 
 
 @command(
-    "merge-tags",
-    format="<t1> <t2>",
-    aliases=("tags-merge",),
-    help_="Merge <t1> into <t2> across contacts and notes.",
+    "find",
+    context=CTX_TAGS,
+    format="<query>",
+    help_text="Substring match on tag names.",
 )
 @input_error
-def merge_tags(args, state):
-    if len(args) < 2:
-        raise ValueError("Usage: merge-tags <t1> <t2>")
+def find_tags_cmd(args, state):
+    if not args:
+        raise ValueError("Usage: find <query>")
+    q = " ".join(args).strip().lstrip("#").lower()
+    matches = [t for t in collect_tags(state) if q in t.name]
+    if not matches:
+        return f"No tags matching '{q}'."
+    field, reverse = state.tags_sort
+    return render_tags_table(_sort_tags(matches, field, reverse))
 
-    source_value = Tag(args[0]).value
-    target_value = Tag(args[1]).value
-    if source_value == target_value:
-        raise ValueError("Cannot merge a tag with itself.")
 
-    contacts_affected, notes_affected = _replace_tag(
-        state,
-        source_value,
-        target_value,
-    )
-    if contacts_affected == 0 and notes_affected == 0:
-        return f"No items tagged '{source_value}'. Nothing merged."
+# --- CTX_TAG: show / contacts / notes / rename / merge / delete ----------
 
-    total = len(_records_with_tag(state, target_value)) + len(
-        _notes_with_tag(state, target_value)
+@command(
+    "show",
+    context=CTX_TAG,
+    help_text="Show this tag's counts.",
+)
+@input_error
+def show_tag_cmd(_args, state):
+    info = find_tag(state, state.entity_key)
+    if info is None:
+        # Possibly renamed/deleted in this session.
+        return f"Tag '{state.entity_key}' no longer exists."
+    return render_tag_card(info)
+
+
+@command(
+    "contacts",
+    context=CTX_TAG,
+    help_text="List contacts with this tag.",
+)
+@input_error
+def tag_contacts_cmd(_args, state):
+    results = state.contacts.search_by_tag(state.entity_key)
+    if not results:
+        return f"No contacts tagged '{state.entity_key}'."
+    return render_contacts_table(results)
+
+
+@command(
+    "notes",
+    context=CTX_TAG,
+    help_text="List notes with this tag.",
+)
+@input_error
+def tag_notes_cmd(_args, state):
+    results = state.notes.find_by_tag(state.entity_key)
+    if not results:
+        return f"No notes tagged '{state.entity_key}'."
+    return render_notes_table(results)
+
+
+def _pluralise(n: int) -> str:
+    return "entity" if n == 1 else "entities"
+
+
+@command(
+    "rename",
+    context=CTX_TAG,
+    format="<new>",
+    help_text="Rename this tag everywhere (bulk update across both books).",
+)
+@input_error
+def rename_tag_cmd(args, state):
+    if not args:
+        raise ValueError("Usage: rename <new>")
+    new = args[0]
+    affected = rename_tag(state, state.entity_key, new)
+    state.entity_key = Tag(new).value
+    return f"Updated {affected} {_pluralise(affected)}."
+
+
+@command(
+    "merge",
+    context=CTX_TAG,
+    format="<other>",
+    help_text="Merge this tag into <other> (bulk update).",
+)
+@input_error
+def merge_tag_cmd(args, state):
+    if not args:
+        raise ValueError("Usage: merge <other>")
+    other = args[0]
+    current = state.entity_key
+    prompt = (
+        f"Merge '{current}' into '{Tag(other).value}'? "
+        f"All entities tagged '{current}' will be tagged "
+        f"'{Tag(other).value}'. (y/N): "
     )
-    usage_word = "usages" if total != 1 else "usage"
-    return (
-        f"Merged '{source_value}' into '{target_value}'. "
-        f"Now '{target_value}' has {total} {usage_word}."
-    )
+    try:
+        ans = input(prompt).strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return "Cancelled."
+    if ans not in ("y", "yes"):
+        return "Cancelled."
+    affected = merge_tag(state, current, other)
+    state.go_up()
+    return f"Updated {affected} {_pluralise(affected)}."
+
+
+@command(
+    "delete",
+    context=CTX_TAG,
+    help_text="Delete this tag from all entities.",
+)
+@input_error
+def delete_tag_cmd(_args, state):
+    name = state.entity_key
+    try:
+        ans = input(
+            f"Delete tag '{name}' from all entities? (y/N): "
+        ).strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return "Cancelled."
+    if ans not in ("y", "yes"):
+        return "Cancelled."
+    affected = delete_tag(state, name)
+    state.go_up()
+    return f"Removed from {affected} {_pluralise(affected)}."
