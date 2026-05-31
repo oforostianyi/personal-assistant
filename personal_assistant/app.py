@@ -14,8 +14,7 @@ from prompt_toolkit.history import InMemoryHistory
 # Importing the package registers every module's handlers via @command.
 import personal_assistant  # noqa: F401
 from personal_assistant.contacts.book import ContactsBook
-
-# from personal_assistant.contacts.handlers import create_contact_from_input  # TODO(card-20)
+from personal_assistant.contacts.handlers import create_contact_from_input
 from personal_assistant.core.paths import contacts_path, notes_path
 from personal_assistant.core.registry import (
     CTX_CONTACTS,
@@ -45,6 +44,7 @@ def _entities_for_module(state: AppState) -> list[str]:
         return [n.title for n in state.notes.data.values()]
     if state.context == CTX_TAGS:
         from personal_assistant.tags.aggregator import collect_tags
+
         return [t.name for t in collect_tags(state)]
     return []
 
@@ -98,8 +98,8 @@ def _try_enter_entity(line: str, state: AppState) -> str | None:
         return None
 
     if state.context == CTX_CONTACTS:
-        # if _confirm_create(query, "contact"):              # TODO(card-20)
-        #     return create_contact_from_input(query, state)  # TODO(card-20)
+        if _confirm_create(query, "contact"):
+            return create_contact_from_input(query, state)
         return ""
     if state.context == CTX_NOTES:
         # if _confirm_create(query, "note"):                 # TODO(card-22)
