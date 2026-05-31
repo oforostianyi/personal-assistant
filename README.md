@@ -22,6 +22,15 @@ entities inside that module.
 - Automatic data persistence between runs.
 - Demo seed loader with 15 contacts and 15 notes for manual testing.
 
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Business requirements](docs/Business-Requirements.md)
+- [Functional requirements](docs/Functional-Requirements-Spec.md)
+- [Solution architecture design](docs/Solution-Architecture-Design-Specification.md)
+- [UI design specification](docs/UI-Design-Prompt.md)
+- [Module briefs](docs/module-briefs/)
+
 ## Requirements
 
 - Python 3.10 or newer.
@@ -302,6 +311,23 @@ tags/work> rename job
 - When a command is mistyped, the app suggests the closest command name.
 - `search <query>` searches contacts and notes at the same time.
 
+## Scope
+
+In scope:
+
+- Local single-user contact, note, birthday, tag, and link management.
+- Context-aware terminal navigation with root, module, and entity prompts.
+- Local pickle persistence under `~/.personal-assistant/`.
+- Demo seed data for review and manual testing.
+- Terminal help, completion, fuzzy suggestions, tables, and entity cards.
+
+Out of scope:
+
+- Web, mobile, or desktop GUI.
+- Multi-user accounts, authentication, permissions, or synchronization.
+- SQL database, cloud storage, remote APIs, telemetry, or AI model integrations.
+- Commercial monetization.
+
 ## Demo Data
 
 The project includes a demo data loader:
@@ -323,6 +349,25 @@ Expected output:
 Seeded 15 contacts and 15 notes (21 contact↔note links).
 Launch with:  python -m personal_assistant
 ```
+
+## Review Evidence
+
+Smoke verification was run on 2026-05-31 using an isolated temporary home
+directory so local user data was not modified.
+
+Passed checks:
+
+- `python -m compileall -q personal_assistant`
+- `python -m personal_assistant.seed --force`
+- seed sanity check: 15 contacts, 15 notes, 2 Alice-linked notes, and
+  `Project kickoff` tags `['project', 'work']`
+- manual REPL walkthrough for root help, contacts, notes, tags, global search,
+  birthdays, and exit persistence
+- POSIX launcher check with `TERM=xterm ./personal-assistance.sh`
+
+Note: `personal-assistance.sh` expects a terminal-like environment. In a
+non-interactive pipe without `TERM`, the `clear` command may fail before the app
+starts.
 
 ## Testing
 
@@ -501,6 +546,26 @@ as:
 
 Obsolete comments about old implementation stages, internal tickets, temporary
 workarounds, and module ownership notes have been removed.
+
+## Credits And Project History
+
+Personal Assistant was implemented as a Python team project using feature
+branches and GitHub pull requests. The final integrated `main` branch contains
+the contextual REPL implementation, demo seed loader, launcher scripts, and
+documentation updates.
+
+Primary contribution areas:
+
+- Core application, context registry, state, storage, and integration.
+- Contacts domain: validation, records, book operations, birthdays, and contact
+  commands.
+- Notes domain: titled notes, multi-line body editing, tag extraction, contact
+  suggestions, and note-contact links.
+- Tags domain: virtual tag aggregation, tag entity views, rename, merge, and
+  delete.
+- UI: context help, completion, fuzzy suggestions, Rich tables/cards, and parser
+  behavior.
+- Documentation: requirements, architecture, smoke evidence, and README.
 
 ## Project Structure
 
