@@ -1,9 +1,7 @@
 """Contact-specific fields.
 
-Stage 1: Name, Phone, Birthday. Stage 3 adds Email, Address, and Tag:
-a shared slug used by contacts and notes because tags are a cross-cutting
-concept. Tag validation accepts Unicode letters, so non-Latin tags are valid
-too.
+Tags are shared by contacts and notes. Tag validation accepts Unicode letters,
+so non-Latin tags are valid too.
 """
 
 from __future__ import annotations

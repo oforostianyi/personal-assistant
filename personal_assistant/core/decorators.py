@@ -15,6 +15,7 @@ def input_error(func):
         KeyError    — lookup of a missing contact/note/tag.
         IndexError  — args[i] out of range.
     """
+
     @wraps(func)
     def inner(*args, **kwargs):
         try:

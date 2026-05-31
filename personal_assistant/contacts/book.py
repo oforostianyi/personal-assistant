@@ -1,8 +1,4 @@
-"""Contacts book.
-
-Stage 1: add_record / find / delete / get_upcoming_birthdays.
-Stage 3: search / search_by_tag / sorted_by.
-"""
+"""Contacts book."""
 
 from __future__ import annotations
 
@@ -120,9 +116,11 @@ class ContactsBook(UserDict[str, "Record"]):
                 elif congrats.weekday() == 6:
                     congrats += timedelta(days=1)
 
-                upcoming.append({
-                    "name": record.name.value,
-                    "congratulation_date": congrats.strftime("%d.%m.%Y"),
-                })
+                upcoming.append(
+                    {
+                        "name": record.name.value,
+                        "congratulation_date": congrats.strftime("%d.%m.%Y"),
+                    }
+                )
 
         return upcoming

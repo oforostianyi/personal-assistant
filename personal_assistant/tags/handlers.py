@@ -6,6 +6,7 @@ from personal_assistant.contacts.fields import Tag
 from personal_assistant.core.decorators import input_error
 from personal_assistant.core.registry import command
 from personal_assistant.tags.aggregator import TagInfo, collect_tags
+from personal_assistant.ui.tables import render_tags_table
 
 
 def _render_tag_list(infos: list[TagInfo]) -> str:
@@ -25,8 +26,7 @@ def _render_tag_list(infos: list[TagInfo]) -> str:
 
     def line(cells: tuple[str, ...]) -> str:
         return "  ".join(
-            cells[index].ljust(widths[index])
-            for index in range(len(headers))
+            cells[index].ljust(widths[index]) for index in range(len(headers))
         )
 
     return "\n".join([line(headers), *(line(row) for row in rows)])
@@ -38,7 +38,9 @@ def _render_find_result(tag_name: str, contacts: list, notes: list) -> str:
 
     if contacts:
         for record in contacts:
-            phones = "; ".join(getattr(phone, "value", str(phone)) for phone in record.phones)
+            phones = "; ".join(
+                getattr(phone, "value", str(phone)) for phone in record.phones
+            )
             parts.append(f"  {record.name.value} ({phones or 'no phones'})")
     else:
         parts.append("  (none)")
@@ -102,11 +104,7 @@ def _replace_tag(state, old_value: str, new_value: str) -> tuple[int, int]:
         if not any(getattr(tag, "value", None) == old_value for tag in tags):
             continue
 
-        kept = [
-            tag
-            for tag in tags
-            if getattr(tag, "value", None) != old_value
-        ]
+        kept = [tag for tag in tags if getattr(tag, "value", None) != old_value]
         if not any(getattr(tag, "value", None) == new_value for tag in kept):
             kept.append(Tag(new_value))
         record.tags = kept
@@ -119,11 +117,7 @@ def _replace_tag(state, old_value: str, new_value: str) -> tuple[int, int]:
         if not any(getattr(tag, "value", None) == old_value for tag in tags):
             continue
 
-        kept = [
-            tag
-            for tag in tags
-            if getattr(tag, "value", None) != old_value
-        ]
+        kept = [tag for tag in tags if getattr(tag, "value", None) != old_value]
         if not any(getattr(tag, "value", None) == new_value for tag in kept):
             kept.append(Tag(new_value))
         note.tags = kept
@@ -136,14 +130,11 @@ def _replace_tag(state, old_value: str, new_value: str) -> tuple[int, int]:
     return contacts_affected, notes_affected
 
 
-@command(
-    "list-tags",
-    aliases=("tags-list",),
-    help_="List all tags with usage counts.",
-)
+@command("list-tags", help_="List all tags with usage counts.")
 @input_error
-def list_tags(_args, state):
-    return _render_tag_list(collect_tags(state))
+def list_tags(args, state):
+    infos = sorted(collect_tags(state), key=lambda t: t.name)
+    return render_tags_table(infos)
 
 
 @command(

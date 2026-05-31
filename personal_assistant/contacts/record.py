@@ -1,7 +1,7 @@
 """Contact record.
 
-Stage 3 adds email/address/tags/linked_note_ids/created_at. Note links use
-UUIDs instead of titles because renaming a note must not break the link.
+Note links use UUIDs instead of titles because renaming a note must not break
+the link.
 
 __setstate__ applies reasonable defaults in case an older pickle is ever
 loaded. This is not a backward-compatibility workaround for hw-08, which the
@@ -14,7 +14,12 @@ from datetime import datetime
 from uuid import UUID
 
 from personal_assistant.contacts.fields import (
-    Address, Birthday, Email, Name, Phone, Tag,
+    Address,
+    Birthday,
+    Email,
+    Name,
+    Phone,
+    Tag,
 )
 
 
@@ -106,9 +111,7 @@ class Record:
         try:
             self.tags.remove(target)
         except ValueError:
-            raise ValueError(
-                f"Tag '{tag}' not found on contact '{self.name.value}'."
-            )
+            raise ValueError(f"Tag '{tag}' not found on contact '{self.name.value}'.")
 
     # --- linked notes -------------------------------------------------------
 

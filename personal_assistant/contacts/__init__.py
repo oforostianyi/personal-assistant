@@ -1,1 +1,1 @@
-"""Contacts module — owned by TL (Team Lead). See docs/module-briefs/contacts.md."""
+"""Contacts module."""

@@ -1,19 +1,11 @@
-"""Compatibility shim for rendering imports.
-
-This file exists for legacy import lines that reference ui.views.* (a name from
-the solo beta prototype). The real implementation lives in ui/tables.py once
-Card 13 lands. Until then, these functions delegate to the text fallback in
-contacts/handlers.py.
-
-When Card 13 ships, this file may either be deleted (with a follow-up PR
-adjusting any remaining imports) or kept as thin re-exports of ui.tables.
-"""
+"""Compatibility shim for rendering imports."""
 
 from __future__ import annotations
 
 
 def render_contacts_table(records) -> str:
     from personal_assistant.contacts.handlers import _render_contacts_text_table
+
     return _render_contacts_text_table(records)
 
 

@@ -1,1 +1,1 @@
-"""Tags module — owned by Person 3. See docs/module-briefs/tags.md."""
+"""Tags module."""

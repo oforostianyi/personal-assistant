@@ -10,36 +10,38 @@ _WORD_RE = re.compile(r"[\w-]{3,}", re.UNICODE)
 _TAG_SLUG_RE = re.compile(r"^[\w-]+$", re.UNICODE)
 
 
-_STOPWORDS: frozenset[str] = frozenset({
-    # English
-    "the",
-    "a",
-    "an",
-    "is",
-    "are",
-    "and",
-    "or",
-    "to",
-    "of",
-    "in",
-    "on",
-    "at",
-    "for",
-    "with",
-    "by",
-    "but",
-    # Ukrainian
-    "не",
-    "та",
-    "і",
-    "в",
-    "на",
-    "з",
-    "до",
-    "від",
-    "за",
-    "як",
-})
+_STOPWORDS: frozenset[str] = frozenset(
+    {
+        # English
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "and",
+        "or",
+        "to",
+        "of",
+        "in",
+        "on",
+        "at",
+        "for",
+        "with",
+        "by",
+        "but",
+        # Ukrainian
+        "не",
+        "та",
+        "і",
+        "в",
+        "на",
+        "з",
+        "до",
+        "від",
+        "за",
+        "як",
+    }
+)
 
 
 def _is_valid_slug(word: str) -> bool:

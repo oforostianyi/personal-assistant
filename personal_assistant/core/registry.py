@@ -33,8 +33,16 @@ class Command:
 COMMAND_REGISTRY: dict[str, Command] = {}
 
 
-def command(name: str, *, context: str = CTX_ROOT, aliases: tuple[str, ...] = (), format: str = "", help_: str = ""):
+def command(
+    name: str,
+    *,
+    context: str = CTX_ROOT,
+    aliases: tuple[str, ...] = (),
+    format: str = "",
+    help_: str = "",
+):
     """Decorator: register a handler under `name` (and any aliases)."""
+
     def decorator(func: Callable) -> Callable:
         cmd = Command(
             name=name,
@@ -48,6 +56,7 @@ def command(name: str, *, context: str = CTX_ROOT, aliases: tuple[str, ...] = ()
         for a in aliases:
             COMMAND_REGISTRY[a] = cmd
         return func
+
     return decorator
 
 
