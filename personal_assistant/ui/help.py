@@ -1,88 +1,63 @@
-"""Auto-generated help text from the flat command registry."""
+"""Render help text for the current context."""
 
 from __future__ import annotations
 
-from personal_assistant.core.registry import Command, command, primary_commands
+from typing import TYPE_CHECKING
+
+from personal_assistant.core.registry import (
+    CTX_CONTACTS,
+    CTX_NOTES,
+    CTX_TAGS,
+    commands_for,
+)
+
+if TYPE_CHECKING:
+    from personal_assistant.core.state import AppState
 
 
-_SECTION_ORDER: tuple[str, ...] = ("Contacts", "Notes", "Tags", "Built-in")
-
-_EXPLICIT_SECTION: dict[str, str] = {
-    "birthdays": "Contacts",
-    "list-tags": "Tags",
-    "find-by-tag": "Tags",
-    "sort-by-tag": "Tags",
-    "rename-tag": "Tags",
-    "merge-tags": "Tags",
-    "hello": "Built-in",
-    "help": "Built-in",
-    "exit": "Built-in",
-    "quit": "Built-in",
-    "q": "Built-in",
-}
-
-_SLUG_TO_SECTION: dict[str, str] = {
-    "contact": "Contacts",
-    "note": "Notes",
-    "tag": "Tags",
-}
+_GLOBAL_HELP = [
+    ("..", "Up one level"),
+    ("/", "Go to root"),
+    ("help / ?", "Show this help"),
+    ("exit / quit / q", "Save and quit"),
+]
 
 
-def _section_for(cmd: Command) -> str:
-    """Return the display section for a command."""
-    if cmd.name in _EXPLICIT_SECTION:
-        return _EXPLICIT_SECTION[cmd.name]
-
-    parts = cmd.name.split("-")
-    if len(parts) >= 2:
-        tail = parts[-1].rstrip("s")
-        section = _SLUG_TO_SECTION.get(tail)
-        if section:
-            return section
-
-    return "Built-in"
+def _entity_enter_hint(ctx: str) -> tuple[str, str] | None:
+    if ctx == CTX_CONTACTS:
+        return ("<name>", "Enter a contact (or create if not found)")
+    if ctx == CTX_NOTES:
+        return ("<title>", "Enter a note (or create if not found)")
+    if ctx == CTX_TAGS:
+        return ("<tag>", "Enter a tag")
+    return None
 
 
-def _format_command_line(cmd: Command) -> str:
-    """Format a command with its format hint and help text."""
-    head = cmd.name
-    if cmd.format:
-        head = f"{cmd.name} {cmd.format}"
-    if cmd.help_:
-        return f"  {head:<36}{cmd.help_}"
-    return f"  {head}"
+def render_help(state: "AppState") -> str:
+    cmds = commands_for(state.context)
+    lines: list[str] = []
+    lines.append(f"Context: {state.context}")
+    lines.append("")
+    if cmds:
+        lines.append("Commands:")
+        for c in cmds:
+            head = c.name
+            if c.format:
+                head = f"{c.name} {c.format}"
+            if c.aliases:
+                head += f"  (aliases: {', '.join(c.aliases)})"
+            tail = f"  — {c.help_text}" if c.help_text else ""
+            lines.append(f"  {head}{tail}")
+    else:
+        lines.append("Commands: (none registered for this context yet)")
 
-
-def _ordered_section_names(sections: dict[str, list[Command]]) -> list[str]:
-    """Return known sections first, then unknown sections alphabetically."""
-    known = [section for section in _SECTION_ORDER if section in sections]
-    unknown = sorted(section for section in sections if section not in _SECTION_ORDER)
-    return known + unknown
-
-
-def render_help() -> str:
-    """Return grouped help text for currently registered commands."""
-    sections: dict[str, list[Command]] = {}
-    for cmd in primary_commands():
-        sections.setdefault(_section_for(cmd), []).append(cmd)
-
-    lines: list[str] = ["Available commands:"]
-    for section_name in _ordered_section_names(sections):
-        commands = sorted(sections[section_name], key=lambda item: item.name)
-        if not commands:
-            continue
+    hint = _entity_enter_hint(state.context)
+    if hint:
         lines.append("")
-        lines.append(f"[{section_name}]")
-        for cmd in commands:
-            lines.append(_format_command_line(cmd))
+        lines.append(f"  {hint[0]:<20} {hint[1]}")
 
     lines.append("")
-    lines.append("[Global]")
-    lines.append(f"  {'help, ?':<36}Show this message.")
-    lines.append(f"  {'exit, quit, q':<36}Leave (auto-saves state).")
+    lines.append("Global:")
+    for name, descr in _GLOBAL_HELP:
+        lines.append(f"  {name:<20} {descr}")
     return "\n".join(lines)
-
-
-@command("help", aliases=("?",), help_="Show all commands grouped by module.")
-def _help_handler(_args, _state):
-    return render_help()

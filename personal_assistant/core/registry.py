@@ -1,14 +1,13 @@
-"""Flat command registry.
+"""Context-aware command registry.
 
-Each handler registers itself via @command(name, ...). Aliases are
-stored as additional keys pointing to the same Command instance, so
-dispatch is O(1) per token.
-
-Unlike beta v2's context-aware registry, this is intentionally flat —
-no hierarchical REPL — to keep scope feasible in 4 days.
+Each handler is registered for a concrete context (root / contacts /
+contacts/* / notes / notes/* / tags / tags/*). Aliases register as
+separate keys pointing to the same Command, so the dispatcher lookup
+stays O(1) per token.
 """
 
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass
+from dataclasses import field as dc_field
 from typing import Callable
 
 CTX_ROOT = "root"
@@ -26,47 +25,29 @@ class Command:
     handler: Callable
     context: str
     format: str = ""
-    help_: str = ""
+    help_text: str = ""
     aliases: tuple[str, ...] = dc_field(default_factory=tuple)
 
 
-COMMAND_REGISTRY: dict[str, Command] = {}
+REGISTRY: dict[str, dict[str, Command]] = {}
 
 
-def command(
-    name: str,
-    *,
-    context: str = CTX_ROOT,
-    aliases: tuple[str, ...] = (),
-    format: str = "",
-    help_: str = "",
-):
-    """Decorator: register a handler under `name` (and any aliases)."""
-
-    def decorator(func: Callable) -> Callable:
-        cmd = Command(
-            name=name,
-            handler=func,
-            context=context,
-            format=format,
-            help_=help_,
-            aliases=tuple(aliases),
-        )
-        COMMAND_REGISTRY[name] = cmd
+def command(name, *, context, aliases=(), format="", help_text=""):
+    def decorator(func):
+        cmd = Command(name, func, context, format, help_text, tuple(aliases))
+        REGISTRY.setdefault(context, {})[name] = cmd
         for a in aliases:
-            COMMAND_REGISTRY[a] = cmd
+            REGISTRY[context][a] = cmd
         return func
 
     return decorator
 
 
-def primary_commands() -> list[Command]:
-    """Distinct primary commands in insertion order (skipping alias keys)."""
-    seen: set[str] = set()
-    out: list[Command] = []
-    for cmd in COMMAND_REGISTRY.values():
-        if cmd.name in seen:
-            continue
-        seen.add(cmd.name)
-        out.append(cmd)
+def commands_for(context: str) -> list[Command]:
+    """Unique primary commands registered for this context, in insertion order."""
+    seen, out = set(), []
+    for cmd in REGISTRY.get(context, {}).values():
+        if cmd.name not in seen:
+            seen.add(cmd.name)
+            out.append(cmd)
     return out
