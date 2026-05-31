@@ -1,35 +1,38 @@
-"""App state.
+"""Application state.
 
-Holds both books (contacts, notes) plus current navigation context.
+`AppState` holds references to both books (contacts / notes) and the
+user's position in the context tree (module + entity_key). The current
+context string and prompt are derived from those two fields.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from personal_assistant.core.registry import (
-    CTX_ROOT,
-    CTX_CONTACTS,
     CTX_CONTACT,
-    CTX_NOTES,
+    CTX_CONTACTS,
     CTX_NOTE,
-    CTX_TAGS,
+    CTX_NOTES,
+    CTX_ROOT,
     CTX_TAG,
+    CTX_TAGS,
 )
-from personal_assistant.notes.book import NotesBook
 
 if TYPE_CHECKING:
     from personal_assistant.contacts.book import ContactsBook
+    from personal_assistant.notes.book import NotesBook
 
 
 @dataclass
 class AppState:
     contacts: "ContactsBook"
-    notes: NotesBook = dc_field(default_factory=NotesBook)
+    notes: "NotesBook"
     module: str | None = None  # "contacts" | "notes" | "tags" | None
     entity_key: str | None = None  # name / title / tag, or None
 
+    # Remembered sort settings per module.
     contacts_sort: tuple[str, bool] = ("name", False)
     notes_sort: tuple[str, bool] = ("title", False)
     tags_sort: tuple[str, bool] = ("name", False)
@@ -39,16 +42,12 @@ class AppState:
         if self.module is None:
             return CTX_ROOT
         if self.entity_key is None:
-            return {
-                "contacts": CTX_CONTACTS,
-                "notes": CTX_NOTES,
-                "tags": CTX_TAGS,
-            }[self.module]
-        return {
-            "contacts": CTX_CONTACT,
-            "notes": CTX_NOTE,
-            "tags": CTX_TAG,
-        }[self.module]
+            return {"contacts": CTX_CONTACTS, "notes": CTX_NOTES, "tags": CTX_TAGS}[
+                self.module
+            ]
+        return {"contacts": CTX_CONTACT, "notes": CTX_NOTE, "tags": CTX_TAG}[
+            self.module
+        ]
 
     def prompt(self) -> str:
         if self.module is None:
