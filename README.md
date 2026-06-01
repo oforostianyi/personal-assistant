@@ -25,20 +25,15 @@ entities inside that module.
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
-- [Business requirements](docs/Business-Requirements.md)
-- [Functional requirements](docs/Functional-Requirements-Spec.md)
-- [Solution architecture design](docs/Solution-Architecture-Design-Specification.md)
-- [UI design specification](docs/UI-Design-Prompt.md)
-- [Module briefs](docs/module-briefs/)
 
 ## Requirements
 
 - Python 3.10 or newer.
 - `pip` for dependency installation.
 - Runtime dependencies from `requirements.txt`:
-  - `rich`
-  - `prompt_toolkit`
-  - `rapidfuzz`
+    - `rich`
+    - `prompt_toolkit`
+    - `rapidfuzz`
 
 ## Installation
 
@@ -133,17 +128,17 @@ After startup, the root prompt is shown:
 
 Global commands:
 
-| Command | Description |
-| --- | --- |
-| `help` or `?` | Show commands available in the current context. |
-| `contacts` | Enter the contacts module. |
-| `notes` | Enter the notes module. |
-| `tags` | Enter the tags module. |
-| `search <query>` | Search both contacts and notes. |
-| `birthdays [days]` | Show upcoming birthdays. |
-| `..` | Move one level up. |
-| `/` | Return to the root context. |
-| `exit`, `quit`, `q` | Exit and save data. |
+| Command             | Description                                     |
+|---------------------|-------------------------------------------------|
+| `help` or `?`       | Show commands available in the current context. |
+| `contacts`          | Enter the contacts module.                      |
+| `notes`             | Enter the notes module.                         |
+| `tags`              | Enter the tags module.                          |
+| `search <query>`    | Search both contacts and notes.                 |
+| `birthdays [days]`  | Show upcoming birthdays.                        |
+| `..`                | Move one level up.                              |
+| `/`                 | Return to the root context.                     |
+| `exit`, `quit`, `q` | Exit and save data.                             |
 
 Inside a module, typing an entity name directly opens that entity when it
 exists. For example, typing `Alice Johnson` at `contacts>` opens that contact.
@@ -160,15 +155,15 @@ contacts>
 
 Commands at `contacts>`:
 
-| Command | Description |
-| --- | --- |
-| `list` | List all contacts. |
-| `sort <field> [asc or desc]` | Set the sort key for `list`. |
-| `find <query>` | Search by name, phone, email, address, or tag. |
-| `filter tag <tag>` | List contacts with the given tag. |
-| `new <name>` | Create a contact and enter it. |
-| `birthdays [days]` | Show upcoming birthdays. |
-| `search <query>` | Search both contacts and notes. |
+| Command                      | Description                                    |
+|------------------------------|------------------------------------------------|
+| `list`                       | List all contacts.                             |
+| `sort <field> [asc or desc]` | Set the sort key for `list`.                   |
+| `find <query>`               | Search by name, phone, email, address, or tag. |
+| `filter tag <tag>`           | List contacts with the given tag.              |
+| `new <name>`                 | Create a contact and enter it.                 |
+| `birthdays [days]`           | Show upcoming birthdays.                       |
+| `search <query>`             | Search both contacts and notes.                |
 
 Contact sort fields:
 
@@ -191,21 +186,21 @@ contacts> list
 
 Commands inside one contact:
 
-| Command | Description |
-| --- | --- |
-| `show` | Show the contact card. |
-| `notes` | List notes linked to this contact. |
-| `edit` | Open the interactive edit menu. |
-| `edit name <value>` | Rename the contact. |
-| `edit phone add <number>` | Add a phone number. |
-| `edit phone edit <old> <new>` | Replace a phone number. |
-| `edit phone remove <number>` | Remove a phone number. |
-| `edit email <value>` | Set email. |
-| `edit address <value>` | Set address. |
-| `edit birthday <DD.MM.YYYY>` | Set birthday. |
-| `edit tags add <tag>` | Add a tag. |
-| `edit tags remove <tag>` | Remove a tag. |
-| `delete` | Delete the contact after confirmation. |
+| Command                       | Description                            |
+|-------------------------------|----------------------------------------|
+| `show`                        | Show the contact card.                 |
+| `notes`                       | List notes linked to this contact.     |
+| `edit`                        | Open the interactive edit menu.        |
+| `edit name <value>`           | Rename the contact.                    |
+| `edit phone add <number>`     | Add a phone number.                    |
+| `edit phone edit <old> <new>` | Replace a phone number.                |
+| `edit phone remove <number>`  | Remove a phone number.                 |
+| `edit email <value>`          | Set email.                             |
+| `edit address <value>`        | Set address.                           |
+| `edit birthday <DD.MM.YYYY>`  | Set birthday.                          |
+| `edit tags add <tag>`         | Add a tag.                             |
+| `edit tags remove <tag>`      | Remove a tag.                          |
+| `delete`                      | Delete the contact after confirmation. |
 
 ## Notes
 
@@ -218,15 +213,15 @@ notes>
 
 Commands at `notes>`:
 
-| Command | Description |
-| --- | --- |
-| `list` | List all notes. |
-| `sort <field> [asc or desc]` | Set the sort key for `list`. |
-| `find <query>` | Search by title or body text. |
-| `filter tag <tag>` | List notes with the given tag. |
-| `filter contact <name>` | List notes linked to a contact. |
-| `new [title]` | Create a note. |
-| `search <query>` | Search both contacts and notes. |
+| Command                      | Description                     |
+|------------------------------|---------------------------------|
+| `list`                       | List all notes.                 |
+| `sort <field> [asc or desc]` | Set the sort key for `list`.    |
+| `find <query>`               | Search by title or body text.   |
+| `filter tag <tag>`           | List notes with the given tag.  |
+| `filter contact <name>`      | List notes linked to a contact. |
+| `new [title]`                | Create a note.                  |
+| `search <query>`             | Search both contacts and notes. |
 
 Note sort fields:
 
@@ -250,16 +245,16 @@ notes/Meeting notes> show
 
 Commands inside one note:
 
-| Command | Description |
-| --- | --- |
-| `show` | Show the note. |
-| `edit` | Edit the note body in a multi-line editor. |
-| `rename <new title>` | Rename the note. |
-| `tag <tag>` | Add a tag. |
-| `untag <tag>` | Remove a tag. |
-| `link <contact>` | Link the note to a contact. |
-| `unlink <contact>` | Remove a contact link. |
-| `delete` | Delete the note after confirmation. |
+| Command              | Description                                |
+|----------------------|--------------------------------------------|
+| `show`               | Show the note.                             |
+| `edit`               | Edit the note body in a multi-line editor. |
+| `rename <new title>` | Rename the note.                           |
+| `tag <tag>`          | Add a tag.                                 |
+| `untag <tag>`        | Remove a tag.                              |
+| `link <contact>`     | Link the note to a contact.                |
+| `unlink <contact>`   | Remove a contact link.                     |
+| `delete`             | Delete the note after confirmation.        |
 
 ## Tags
 
@@ -272,11 +267,11 @@ tags>
 
 Commands at `tags>`:
 
-| Command | Description |
-| --- | --- |
-| `list` | List all tags with usage counts. |
-| `sort <field> [asc or desc]` | Set the sort key for `list`. |
-| `find <query>` | Search tag names by substring. |
+| Command                      | Description                      |
+|------------------------------|----------------------------------|
+| `list`                       | List all tags with usage counts. |
+| `sort <field> [asc or desc]` | Set the sort key for `list`.     |
+| `find <query>`               | Search tag names by substring.   |
 
 Tag sort fields:
 
@@ -286,14 +281,14 @@ name, usage, contacts, notes
 
 Commands inside one tag:
 
-| Command | Description |
-| --- | --- |
-| `show` | Show tag usage counts. |
-| `contacts` | List contacts with this tag. |
-| `notes` | List notes with this tag. |
-| `rename <new>` | Rename the tag everywhere. |
-| `merge <other>` | Merge this tag into another tag. |
-| `delete` | Remove this tag from all entities. |
+| Command         | Description                        |
+|-----------------|------------------------------------|
+| `show`          | Show tag usage counts.             |
+| `contacts`      | List contacts with this tag.       |
+| `notes`         | List notes with this tag.          |
+| `rename <new>`  | Rename the tag everywhere.         |
+| `merge <other>` | Merge this tag into another tag.   |
+| `delete`        | Remove this tag from all entities. |
 
 Example:
 
