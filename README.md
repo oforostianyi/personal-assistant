@@ -163,7 +163,7 @@ Commands at `contacts>`:
 | Command | Description |
 | --- | --- |
 | `list` | List all contacts. |
-| `sort <field> [asc|desc]` | Set the sort key for `list`. |
+| `sort <field> [asc or desc]` | Set the sort key for `list`. |
 | `find <query>` | Search by name, phone, email, address, or tag. |
 | `filter tag <tag>` | List contacts with the given tag. |
 | `new <name>` | Create a contact and enter it. |
@@ -221,7 +221,7 @@ Commands at `notes>`:
 | Command | Description |
 | --- | --- |
 | `list` | List all notes. |
-| `sort <field> [asc|desc]` | Set the sort key for `list`. |
+| `sort <field> [asc or desc]` | Set the sort key for `list`. |
 | `find <query>` | Search by title or body text. |
 | `filter tag <tag>` | List notes with the given tag. |
 | `filter contact <name>` | List notes linked to a contact. |
@@ -275,7 +275,7 @@ Commands at `tags>`:
 | Command | Description |
 | --- | --- |
 | `list` | List all tags with usage counts. |
-| `sort <field> [asc|desc]` | Set the sort key for `list`. |
+| `sort <field> [asc or desc]` | Set the sort key for `list`. |
 | `find <query>` | Search tag names by substring. |
 
 Tag sort fields:
